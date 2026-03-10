@@ -2,13 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Instala dependências do sistema
+# Instala dependências do sistema e o Poetry
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir poetry \
+    && poetry config virtualenvs.create false
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+COPY pyproject.toml poetry.lock* ./
+RUN poetry install --no-interaction --no-ansi --without dev
 
 COPY . .
 
