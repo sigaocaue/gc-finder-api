@@ -14,10 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.database import async_session
 from app.logging_config import setup_logging
-from seeds.seed_gc_medias import seed_gc_medias
-from seeds.seed_gc_meetings import seed_gc_meetings
 from seeds.seed_gcs import seed_gcs
-from seeds.seed_leaders import seed_leaders
 from seeds.seed_users import seed_users
 
 logger = logging.getLogger(__name__)
@@ -32,17 +29,8 @@ async def run_all_seeds() -> None:
         logger.info("--- Seed: Usuários ---")
         await seed_users(db)
 
-        logger.info("--- Seed: Líderes ---")
-        leaders = await seed_leaders(db)
-
-        logger.info("--- Seed: GCs ---")
-        gcs = await seed_gcs(db, leaders)
-
-        logger.info("--- Seed: Encontros ---")
-        await seed_gc_meetings(db, gcs)
-
-        logger.info("--- Seed: Mídias ---")
-        await seed_gc_medias(db, gcs)
+        logger.info("--- Seed: GCs (com líderes, encontros e mídias) ---")
+        await seed_gcs(db)
 
     logger.info("Todos os seeds foram executados com sucesso!")
 
