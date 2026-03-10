@@ -9,10 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false
 
-COPY pyproject.toml poetry.lock* ./
-RUN poetry install --no-interaction --no-ansi --without dev
-
 COPY . .
+RUN poetry install --no-interaction --no-ansi --without dev
 
 EXPOSE 8000
 
