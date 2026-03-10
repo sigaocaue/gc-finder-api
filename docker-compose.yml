@@ -10,10 +10,8 @@ services:
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
+      - db
+      - cache
     networks:
       - gc_network
 
