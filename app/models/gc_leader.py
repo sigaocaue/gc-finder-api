@@ -20,7 +20,6 @@ class GcLeader(Base):
     leader_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("leaders.id"), primary_key=True
     )
-    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now()
     )
@@ -33,6 +32,5 @@ class GcLeader(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<GcLeader(gc_id={self.gc_id}, leader_id={self.leader_id}, "
-            f"is_primary={self.is_primary})>"
+            f"<GcLeader(gc_id={self.gc_id}, leader_id={self.leader_id} "
         )

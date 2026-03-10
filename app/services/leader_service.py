@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.leader import Leader
+from app.models.leader_contact import LeaderContact
 from app.repositories.leader_repository import LeaderRepository
 from app.schemas.leader import LeaderCreate, LeaderUpdate
 
@@ -34,8 +35,14 @@ class LeaderService:
         return leader
 
     async def create(self, data: LeaderCreate) -> Leader:
-        """Cria um novo líder."""
-        leader = Leader(**data.model_dump())
+        """Cria um novo líder com seus contatos."""
+        leader_data = data.model_dump(exclude={"contacts"})
+        leader = Leader(**leader_data)
+
+        for contact_data in data.contacts:
+            contact = LeaderContact(**contact_data.model_dump(), leader=leader)
+            self.db.add(contact)
+
         leader = await self.repo.create(leader)
         logger.info("Líder criado: %s (id=%s)", leader.name, leader.id)
         return leader

@@ -17,9 +17,6 @@ class Leader(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    instagram: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -28,6 +25,11 @@ class Leader(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relacionamento 1:N com contatos/redes sociais do líder
+    contacts: Mapped[list["LeaderContact"]] = relationship(
+        "LeaderContact", back_populates="leader", lazy="selectin"
     )
 
     # Relacionamento many-to-many com GC via tabela pivot gc_leaders
