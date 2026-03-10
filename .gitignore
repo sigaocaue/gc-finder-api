@@ -214,3 +214,6 @@ __marimo__/
 .aiassistant
 .claude
 CLAUDE.md
+
+# Docker volumes
+.persistence
