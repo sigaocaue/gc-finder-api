@@ -8,14 +8,15 @@ from sqlalchemy import func, select
 from app.dependencies import AdminUser, DbSession
 from app.models import Gc, GcMedia, GcMeeting, Leader, LeaderContact, User
 from app.schemas.common import ApiResponse
+from app.schemas.stats import EntityCountsResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/stats", tags=["stats"])
 
 
-@router.get("/counts", response_model=ApiResponse[dict])
-async def get_entity_counts(db: DbSession, current_user: AdminUser):
+@router.get("/counts", response_model=ApiResponse[EntityCountsResponse])
+async def get_entity_counts(db: DbSession, current_user: AdminUser) -> ApiResponse[EntityCountsResponse]:
     """Retorna a quantidade de registros ativos de cada entidade principal."""
     # Entidades com soft delete (is_active) — conta apenas registros ativos
     soft_delete_models = {
@@ -47,4 +48,7 @@ async def get_entity_counts(db: DbSession, current_user: AdminUser):
 
     logger.info("Contagem de entidades consultada pelo usuário %s", current_user.email)
 
-    return ApiResponse(data=counts, message="Contagem de registros por entidade")
+    return ApiResponse(
+        data=EntityCountsResponse(**counts),
+        message="Contagem de registros por entidade",
+    )
