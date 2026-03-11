@@ -48,14 +48,6 @@ GCS = [
         "meetings": [
             {"weekday": 5, "start_time": time(20, 0), "notes": None},
         ],
-        "medias": [
-            {
-                "type": "image",
-                "url": "https://placehold.co/600x400?text=GC+Samambaias",
-                "caption": "Foto do GC Casais Jardim Samambaias",
-                "display_order": 0,
-            },
-        ],
     },
     {
         "name": "GC Casais Colonia",
@@ -86,14 +78,6 @@ GCS = [
         "meetings": [
             {"weekday": 5, "start_time": time(19, 30), "notes": None},
         ],
-        "medias": [
-            {
-                "type": "image",
-                "url": "https://placehold.co/600x400?text=GC+Colonia",
-                "caption": "Foto do GC Casais Colonia",
-                "display_order": 0,
-            },
-        ],
     },
     {
         "name": "GC Depois do Sim Medeiros",
@@ -122,14 +106,6 @@ GCS = [
         ],
         "meetings": [
             {"weekday": 4, "start_time": time(19, 30), "notes": None},
-        ],
-        "medias": [
-            {
-                "type": "image",
-                "url": "https://placehold.co/600x400?text=GC+Medeiros",
-                "caption": "Foto do GC Depois do Sim Medeiros",
-                "display_order": 0,
-            },
         ],
     },
     {
@@ -163,14 +139,6 @@ GCS = [
         "meetings": [
             {"weekday": 2, "start_time": time(19, 30), "notes": None},
         ],
-        "medias": [
-            {
-                "type": "image",
-                "url": "https://placehold.co/600x400?text=GC+Hortolandia",
-                "caption": "Foto do GC Depois do Sim Hortolândia",
-                "display_order": 0,
-            },
-        ],
     },
     {
         "name": "GC Eloy Chaves",
@@ -201,14 +169,6 @@ GCS = [
         ],
         "meetings": [
             {"weekday": 2, "start_time": time(20, 0), "notes": None},
-        ],
-        "medias": [
-            {
-                "type": "image",
-                "url": "https://placehold.co/600x400?text=GC+Eloy+Chaves",
-                "caption": "Foto do GC Eloy Chaves",
-                "display_order": 0,
-            },
         ],
     },
 ]
