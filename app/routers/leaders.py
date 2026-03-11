@@ -49,7 +49,7 @@ async def get_leader(leader_id: UUID, db: DbSession):
 
 
 @router.post("/", response_model=ApiResponse[LeaderResponse], status_code=status.HTTP_201_CREATED)
-async def create_leader(body: LeaderCreate, current_user: CurrentUser, db: DbSession):
+async def create_leader(body: LeaderCreate, current_user: CurrentUser, db: DbSession) -> ApiResponse[LeaderResponse]:
     """Cria um novo líder (requer autenticação)."""
     service = LeaderService(db)
     leader = await service.create(body)

@@ -37,7 +37,7 @@ class GcService:
     async def list_all(self, skip: int = 0, limit: int = 100) -> list[Gc]:
         """Retorna GCs ativos com paginação."""
         result = await self.db.execute(
-            select(Gc).where(Gc.is_active.is_(True)).offset(skip).limit(limit)
+            select(Gc).offset(skip).limit(limit)
         )
         return list(result.scalars().all())
 

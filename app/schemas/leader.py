@@ -59,6 +59,7 @@ class LeaderResponse(BaseModel):
 
     id: UUID
     name: str
+    display_name: str | None = None
     bio: str | None = None
     photo_url: str | None = None
     is_active: bool
