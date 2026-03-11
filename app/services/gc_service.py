@@ -78,6 +78,36 @@ class GcService:
             is_active=True,
         )
         self.db.add(gc)
+        await self.db.flush()
+
+        # Vincula líderes informados ao GC
+        for leader_id_str in data.leaders:
+            leader_id = UUID(leader_id_str)
+            link = GcLeader(gc_id=gc.id, leader_id=leader_id)
+            self.db.add(link)
+
+        # Cria reuniões informadas e vincula ao GC
+        for meeting_data in data.meetings:
+            hour, minute = map(int, meeting_data.start_time.split(":"))
+            meeting = GcMeeting(
+                gc_id=gc.id,
+                weekday=meeting_data.weekday,
+                start_time=time(hour, minute),
+                notes=meeting_data.notes,
+            )
+            self.db.add(meeting)
+
+        # Cria mídias informadas e vincula ao GC
+        for media_data in data.medias:
+            media = GcMedia(
+                gc_id=gc.id,
+                type=media_data.type,
+                url=media_data.url,
+                caption=media_data.caption,
+                display_order=media_data.display_order,
+            )
+            self.db.add(media)
+
         await self.db.commit()
         await self.db.refresh(gc)
         logger.info("GC criado: %s (id=%s)", gc.name, gc.id)

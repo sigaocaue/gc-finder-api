@@ -44,13 +44,13 @@ async def get_gc(gc_id: UUID, db: DbSession):
 # --- Rotas autenticadas ---
 
 
-@router.post("/", response_model=ApiResponse[GcResponse], status_code=status.HTTP_201_CREATED)
-async def create_gc(body: GcCreate, current_user: CurrentUser, db: DbSession):
+@router.post("/", response_model=ApiResponse[GcDetailResponse], status_code=status.HTTP_201_CREATED)
+async def create_gc(body: GcCreate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcDetailResponse]:
     """Cria um novo GC com geocodificação automática do endereço (requer autenticação)."""
     service = GcService(db)
     gc = await service.create(body)
     return ApiResponse(
-        data=GcResponse.model_validate(gc),
+        data=GcDetailResponse.model_validate(gc),
         message="GC criado com sucesso",
     )
 

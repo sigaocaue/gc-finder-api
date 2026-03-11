@@ -5,8 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.gc_media import GcMediaResponse
-from app.schemas.gc_meeting import GcMeetingResponse
+from app.schemas.gc_media import GcMediaCreate, GcMediaResponse
+from app.schemas.gc_meeting import GcMeetingCreate, GcMeetingResponse
 from app.schemas.leader import LeaderBrief
 
 
@@ -22,6 +22,9 @@ class GcCreate(BaseModel):
     neighborhood: str
     city: str
     state: str
+    leaders: list[str] = []
+    meetings: list[GcMeetingCreate] = []
+    medias: list[GcMediaCreate] = []
 
 
 class GcUpdate(BaseModel):
