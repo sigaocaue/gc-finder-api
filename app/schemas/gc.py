@@ -40,6 +40,9 @@ class GcUpdate(BaseModel):
     city: str | None = None
     state: str | None = None
     is_active: bool | None = None
+    leaders: list[str] | None = None
+    meetings: list[GcMeetingCreate] | None = None
+    medias: list[GcMediaCreate] | None = None
 
 
 class GcResponse(BaseModel):

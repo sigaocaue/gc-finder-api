@@ -55,8 +55,8 @@ async def create_gc(body: GcCreate, current_user: CurrentUser, db: DbSession) ->
     )
 
 
-@router.put("/{gc_id}", response_model=ApiResponse[GcResponse])
-async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: DbSession):
+@router.put("/{gc_id}", response_model=ApiResponse[GcDetailResponse])
+async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcDetailResponse]:
     """Atualiza os dados de um GC (requer autenticação)."""
     service = GcService(db)
     gc = await service.update(gc_id, body)
@@ -66,7 +66,7 @@ async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: 
             detail="GC não encontrado",
         )
     return ApiResponse(
-        data=GcResponse.model_validate(gc),
+        data=GcDetailResponse.model_validate(gc),
         message="GC atualizado com sucesso",
     )
 

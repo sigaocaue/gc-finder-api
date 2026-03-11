@@ -118,6 +118,11 @@ class GcService:
         gc = await self.get_by_id(gc_id)
         update_data = data.model_dump(exclude_unset=True)
 
+        # Extrai os campos de relacionamento antes de iterar nos campos simples
+        leaders_input = update_data.pop("leaders", None)
+        meetings_input = update_data.pop("meetings", None)
+        medias_input = update_data.pop("medias", None)
+
         # Se o CEP foi alterado, reconsulta endereço e coordenadas
         if "zip_code" in update_data and update_data["zip_code"]:
             address_data = await fetch_address_from_cep(update_data["zip_code"])
@@ -138,6 +143,55 @@ class GcService:
 
         for field, value in update_data.items():
             setattr(gc, field, value)
+
+        # Atualiza líderes se o campo foi enviado (None = não altera)
+        if leaders_input is not None:
+            existing_leaders = await self.db.execute(
+                select(GcLeader).where(GcLeader.gc_id == gc_id)
+            )
+            for link in existing_leaders.scalars().all():
+                await self.db.delete(link)
+
+            for leader_id_str in leaders_input:
+                leader_id = UUID(leader_id_str)
+                link = GcLeader(gc_id=gc_id, leader_id=leader_id)
+                self.db.add(link)
+
+        # Atualiza reuniões se o campo foi enviado (None = não altera)
+        if meetings_input is not None:
+            existing_meetings = await self.db.execute(
+                select(GcMeeting).where(GcMeeting.gc_id == gc_id)
+            )
+            for meeting in existing_meetings.scalars().all():
+                await self.db.delete(meeting)
+
+            for meeting_data in meetings_input:
+                hour, minute = map(int, meeting_data["start_time"].split(":"))
+                meeting = GcMeeting(
+                    gc_id=gc_id,
+                    weekday=meeting_data["weekday"],
+                    start_time=time(hour, minute),
+                    notes=meeting_data.get("notes"),
+                )
+                self.db.add(meeting)
+
+        # Atualiza mídias se o campo foi enviado (None = não altera)
+        if medias_input is not None:
+            existing_medias = await self.db.execute(
+                select(GcMedia).where(GcMedia.gc_id == gc_id)
+            )
+            for media in existing_medias.scalars().all():
+                await self.db.delete(media)
+
+            for media_data in medias_input:
+                media = GcMedia(
+                    gc_id=gc_id,
+                    type=media_data["type"],
+                    url=media_data["url"],
+                    caption=media_data.get("caption"),
+                    display_order=media_data.get("display_order", 0),
+                )
+                self.db.add(media)
 
         await self.db.commit()
         await self.db.refresh(gc)
