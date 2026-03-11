@@ -37,6 +37,7 @@ from app.routers.gcs import router as gcs_router
 from app.routers.health import router as health_router
 from app.routers.leaders import router as leaders_router
 from app.routers.public import router as public_router
+from app.routers.stats import router as stats_router
 from app.routers.users import router as users_router
 
 app.include_router(health_router)
@@ -47,3 +48,4 @@ app.include_router(gcs_router)
 app.include_router(gc_meetings_router)
 app.include_router(gc_medias_router)
 app.include_router(public_router)
+app.include_router(stats_router)
