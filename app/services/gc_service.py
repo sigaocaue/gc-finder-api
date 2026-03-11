@@ -55,14 +55,11 @@ class GcService:
 
     async def create(self, data: GcCreate) -> Gc:
         """Cria um novo GC. Consulta o CEP para preencher endereço e coordenadas."""
-        # Busca endereço a partir do CEP
-        address_data = await fetch_address_from_cep(data.zip_code)
-
         # Monta o endereço completo para geocodificação
         full_address = (
-            f"{address_data['street']}, {data.number or 's/n'}, "
-            f"{address_data['neighborhood']}, {address_data['city']} - "
-            f"{address_data['state']}, Brasil"
+            f"{data.street}, {data.number or 's/n'}, "
+            f"{data.neighborhood}, {data.city} - "
+            f"{data.state}, Brasil"
         )
         coords = await fetch_coordinates(full_address)
 
@@ -70,14 +67,15 @@ class GcService:
             name=data.name,
             description=data.description,
             zip_code=format_cep(data.zip_code),
-            street=address_data["street"],
+            street=data.street,
             number=data.number,
             complement=data.complement,
-            neighborhood=address_data["neighborhood"],
-            city=address_data["city"],
-            state=address_data["state"],
+            neighborhood=data.neighborhood,
+            city=data.city,
+            state=data.state,
             latitude=coords[0] if coords else None,
             longitude=coords[1] if coords else None,
+            is_active=True,
         )
         self.db.add(gc)
         await self.db.commit()

@@ -16,8 +16,12 @@ class GcCreate(BaseModel):
     name: str
     description: str | None = None
     zip_code: str
+    street: str
     number: str | None = None
     complement: str | None = None
+    neighborhood: str
+    city: str
+    state: str
 
 
 class GcUpdate(BaseModel):
@@ -26,8 +30,12 @@ class GcUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     zip_code: str | None = None
+    street: str | None = None
     number: str | None = None
     complement: str | None = None
+    neighborhood: str | None = None
+    city: str | None = None
+    state: str | None = None
     is_active: bool | None = None
 
 
@@ -40,17 +48,17 @@ class GcResponse(BaseModel):
     name: str
     description: str | None = None
     zip_code: str
-    street: str | None = None
+    street: str
     number: str | None = None
     complement: str | None = None
-    neighborhood: str | None = None
-    city: str | None = None
-    state: str | None = None
+    neighborhood: str
+    city: str
+    state: str
     latitude: float | None = None
     longitude: float | None = None
     is_active: bool
     created_at: datetime
-
+    updated_at: datetime
 
 class GcDetailResponse(GcResponse):
     """Dados detalhados do GC, incluindo líderes, reuniões e mídias."""
