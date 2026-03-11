@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-
 from sqlalchemy import Boolean, Index, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,6 +63,11 @@ class Gc(Base):
     medias: Mapped[list["GcMedia"]] = relationship(
         "GcMedia", back_populates="gc", lazy="selectin"
     )
+
+    @property
+    def leaders(self):
+        """Monta a lista de líderes a partir da tabela associativa."""
+        return [assoc.leader for assoc in self.leader_associations]
 
     def __repr__(self) -> str:
         return f"<Gc(id={self.id}, name={self.name}, city={self.city})>"

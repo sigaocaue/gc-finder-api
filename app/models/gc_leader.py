@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, func
+from sqlalchemy import ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +27,7 @@ class GcLeader(Base):
     # Relacionamentos
     gc: Mapped["Gc"] = relationship("Gc", back_populates="leader_associations")
     leader: Mapped["Leader"] = relationship(
-        "Leader", back_populates="gc_associations"
+        "Leader", back_populates="gc_associations", lazy="selectin"
     )
 
     def __repr__(self) -> str:

@@ -75,4 +75,3 @@ class LeaderBrief(BaseModel):
     id: UUID
     name: str
     contacts: list[LeaderContactResponse] = []
-    is_primary: bool

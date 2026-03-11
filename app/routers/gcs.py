@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.dependencies import CurrentUser, DbSession
 from app.schemas.common import ApiResponse
-from app.schemas.gc import GcCreate, GcDetailResponse, GcLeaderLink, GcResponse, GcUpdate
+from app.schemas.gc import GcCreate, GcLeaderLink, GcResponse, GcUpdate
 from app.services.gc_service import GcService
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ async def list_gcs(
     db: DbSession,
     skip: int = Query(0, ge=0, description="Registros a pular"),
     limit: int = Query(20, ge=1, le=100, description="Quantidade máxima de registros"),
-):
+) -> ApiResponse[list[GcResponse]]:
     """Lista todos os GCs ativos com paginação (rota pública)."""
     service = GcService(db)
     gcs = await service.list_all(skip=skip, limit=limit)
@@ -33,8 +33,8 @@ async def list_gcs(
     )
 
 
-@router.get("/{gc_id}", response_model=ApiResponse[GcDetailResponse])
-async def get_gc(gc_id: UUID, db: DbSession):
+@router.get("/{gc_id}", response_model=ApiResponse[GcResponse])
+async def get_gc(gc_id: UUID, db: DbSession) -> ApiResponse[GcResponse]:
     """Busca um GC pelo ID com líderes, reuniões e mídias (rota pública)."""
     service = GcService(db)
     gc = await service.get_by_id(gc_id)
@@ -44,19 +44,19 @@ async def get_gc(gc_id: UUID, db: DbSession):
 # --- Rotas autenticadas ---
 
 
-@router.post("/", response_model=ApiResponse[GcDetailResponse], status_code=status.HTTP_201_CREATED)
-async def create_gc(body: GcCreate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcDetailResponse]:
+@router.post("/", response_model=ApiResponse[GcResponse], status_code=status.HTTP_201_CREATED)
+async def create_gc(body: GcCreate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcResponse]:
     """Cria um novo GC com geocodificação automática do endereço (requer autenticação)."""
     service = GcService(db)
     gc = await service.create(body)
     return ApiResponse(
-        data=GcDetailResponse.model_validate(gc),
+        data=GcResponse.model_validate(gc),
         message="GC criado com sucesso",
     )
 
 
-@router.put("/{gc_id}", response_model=ApiResponse[GcDetailResponse])
-async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcDetailResponse]:
+@router.put("/{gc_id}", response_model=ApiResponse[GcResponse])
+async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcResponse]:
     """Atualiza os dados de um GC (requer autenticação)."""
     service = GcService(db)
     gc = await service.update(gc_id, body)
@@ -66,7 +66,7 @@ async def update_gc(gc_id: UUID, body: GcUpdate, current_user: CurrentUser, db: 
             detail="GC não encontrado",
         )
     return ApiResponse(
-        data=GcDetailResponse.model_validate(gc),
+        data=GcResponse.model_validate(gc),
         message="GC atualizado com sucesso",
     )
 
@@ -90,12 +90,15 @@ async def deactivate_gc(gc_id: UUID, current_user: CurrentUser, db: DbSession):
 # --- Vínculo de líderes ---
 
 
-@router.post("/{gc_id}/leaders", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
-async def link_leader(gc_id: UUID, body: GcLeaderLink, current_user: CurrentUser, db: DbSession):
+@router.post("/{gc_id}/leaders", response_model=ApiResponse[GcResponse], status_code=status.HTTP_201_CREATED)
+async def link_leader(gc_id: UUID, body: GcLeaderLink, current_user: CurrentUser, db: DbSession) -> ApiResponse[GcResponse]:
     """Vincula um líder a um GC (requer autenticação)."""
     service = GcService(db)
-    await service.link_leader(gc_id, body.leader_id, body.is_primary)
-    return ApiResponse(message="Líder vinculado ao GC com sucesso")
+    gc = await service.link_leader(gc_id, body.leader_id)
+    return ApiResponse(
+        data=GcResponse.model_validate(gc),
+        message="Líder vinculado ao GC com sucesso",
+    )
 
 
 @router.delete("/{gc_id}/leaders/{leader_id}", response_model=ApiResponse)

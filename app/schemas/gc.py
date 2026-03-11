@@ -103,13 +103,10 @@ class GcResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-class GcDetailResponse(GcResponse):
     """Dados detalhados do GC, incluindo líderes, reuniões e mídias."""
-
     leaders: list[LeaderBrief] = []
     meetings: list[GcMeetingResponse] = []
     medias: list[GcMediaResponse] = []
-
 
 class GcMapItem(BaseModel):
     """Dados resumidos do GC para exibição no mapa."""
@@ -134,4 +131,3 @@ class GcLeaderLink(BaseModel):
     """Dados para vincular um líder a um GC."""
 
     leader_id: UUID
-    is_primary: bool = False

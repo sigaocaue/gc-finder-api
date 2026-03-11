@@ -205,12 +205,10 @@ class GcService:
     # Vínculo GC ↔ Líder
     # ------------------------------------------------------------------ #
 
-    async def link_leader(
-        self, gc_id: UUID, leader_id: UUID, is_primary: bool = False
-    ) -> None:
+    async def link_leader(self, gc_id: UUID, leader_id: UUID) -> Gc:
         """Vincula um líder a um GC."""
         # Verifica se o GC existe
-        await self.get_by_id(gc_id)
+        gc = await self.get_by_id(gc_id)
 
         # Verifica se o vínculo já existe
         result = await self.db.execute(
@@ -228,7 +226,9 @@ class GcService:
         link = GcLeader(gc_id=gc_id, leader_id=leader_id)
         self.db.add(link)
         await self.db.commit()
+        await self.db.refresh(gc)
         logger.info("Líder %s vinculado ao GC %s", leader_id, gc_id)
+        return gc
 
     async def unlink_leader(self, gc_id: UUID, leader_id: UUID) -> None:
         """Remove o vínculo de um líder com um GC."""
