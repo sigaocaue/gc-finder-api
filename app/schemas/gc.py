@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.schemas.gc_media import GcMediaCreate, GcMediaResponse
 from app.schemas.gc_meeting import GcMeetingCreate, GcMeetingResponse
@@ -43,6 +43,21 @@ class GcUpdate(BaseModel):
     leaders: list[str] | None = None
     meetings: list[GcMeetingCreate] | None = None
     medias: list[GcMediaCreate] | None = None
+
+    _ADDRESS_FIELDS = {"zip_code", "street", "neighborhood", "city", "state"}
+
+    @model_validator(mode="after")
+    def validate_address_fields(self) -> "GcUpdate":
+        """Se qualquer campo de endereço for enviado, todos são obrigatórios."""
+        values = self.model_dump(exclude_unset=True)
+        sent = self._ADDRESS_FIELDS & values.keys()
+        if sent and sent != self._ADDRESS_FIELDS:
+            missing = self._ADDRESS_FIELDS - sent
+            raise ValueError(
+                f"Ao alterar o endereço, todos os campos são obrigatórios. "
+                f"Faltando: {', '.join(sorted(missing))}"
+            )
+        return self
 
 
 class GcResponse(BaseModel):

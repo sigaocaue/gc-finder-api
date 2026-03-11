@@ -20,7 +20,7 @@ from app.services.geocoding_service import (
     fetch_coordinates,
     haversine_distance,
 )
-from app.utils.cep import format_cep, sanitize_cep
+from app.utils.cep import sanitize_cep
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class GcService:
         gc = Gc(
             name=data.name,
             description=data.description,
-            zip_code=format_cep(data.zip_code),
+            zip_code=sanitize_cep(data.zip_code),
             street=data.street,
             number=data.number,
             complement=data.complement,
@@ -123,19 +123,14 @@ class GcService:
         meetings_input = update_data.pop("meetings", None)
         medias_input = update_data.pop("medias", None)
 
-        # Se o CEP foi alterado, reconsulta endereço e coordenadas
-        if "zip_code" in update_data and update_data["zip_code"]:
-            address_data = await fetch_address_from_cep(update_data["zip_code"])
-            update_data["zip_code"] = format_cep(update_data["zip_code"])
-            update_data["street"] = address_data["street"]
-            update_data["neighborhood"] = address_data["neighborhood"]
-            update_data["city"] = address_data["city"]
-            update_data["state"] = address_data["state"]
+        # Se campos de endereço foram alterados, recalcula coordenadas
+        if "zip_code" in update_data:
+            update_data["zip_code"] = sanitize_cep(update_data["zip_code"])
 
             full_address = (
-                f"{address_data['street']}, {update_data.get('number', gc.number) or 's/n'}, "
-                f"{address_data['neighborhood']}, {address_data['city']} - "
-                f"{address_data['state']}, Brasil"
+                f"{update_data['street']}, {update_data.get('number', gc.number) or 's/n'}, "
+                f"{update_data['neighborhood']}, {update_data['city']} - "
+                f"{update_data['state']}, Brasil"
             )
             coords = await fetch_coordinates(full_address)
             update_data["latitude"] = coords[0] if coords else None
@@ -231,7 +226,7 @@ class GcService:
                 detail="Líder já vinculado a este GC",
             )
 
-        link = GcLeader(gc_id=gc_id, leader_id=leader_id, is_primary=is_primary)
+        link = GcLeader(gc_id=gc_id, leader_id=leader_id)
         self.db.add(link)
         await self.db.commit()
         logger.info("Líder %s vinculado ao GC %s", leader_id, gc_id)
@@ -272,7 +267,8 @@ class GcService:
     async def find_nearby(self, zip_code: str) -> list[dict]:
         """Encontra os GCs mais próximos de um CEP informado.
 
-        Geocodifica o CEP de entrada, calcula a distância Haversine até
+        Transforma o CEP de entrada coordenadas geográficas de latitude e longitude,
+        depois calcula a distância Haversine até
         todos os GCs ativos com coordenadas e retorna ordenado por distância.
         """
         # Busca endereço e coordenadas do CEP informado
