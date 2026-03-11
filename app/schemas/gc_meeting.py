@@ -1,9 +1,9 @@
 """Schemas de horário de reunião do GC."""
 
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class GcMeetingCreate(BaseModel):
@@ -33,3 +33,9 @@ class GcMeetingResponse(BaseModel):
     start_time: str
     notes: str | None = None
     created_at: datetime
+
+    @field_validator("start_time", mode="before")
+    def format_start_time(cls, value: str | time) -> str:
+        if isinstance(value, time):
+            return value.strftime("%H:%M")
+        return value
