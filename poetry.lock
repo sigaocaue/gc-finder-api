@@ -565,7 +565,6 @@ httpx = ">=0.27.0"
 pydantic = [
     {version = ">=2.7.4", extras = ["email"], markers = "python_version < \"3.13\""},
     {version = ">=2.8.0", extras = ["email"], markers = "python_version == \"3.13\""},
-    {version = ">=2.12.0", extras = ["email"], markers = "python_version >= \"3.14\""},
 ]
 rich-toolkit = ">=0.19.7"
 rignore = ">=0.5.1"
@@ -2363,5 +2362,5 @@ files = [
 
 [metadata]
 lock-version = "2.1"
-python-versions = "^3.12"
-content-hash = "d5a0f53095f9163be1bbbfa6cb956eba5cea2426658e2ae041296256696c41fd"
+python-versions = ">=3.12,<3.14"
+content-hash = "461f21c893bb488e86473a579ba034ac43a9d480cc42733758f11ec97695c721"

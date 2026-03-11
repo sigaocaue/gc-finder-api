@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,12 @@ from app.logging_config import setup_logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if (sys.implementation.cache_tag or "").endswith("t"):
+        raise RuntimeError(
+            "Runtime Python free-threaded (3.14t) não é suportado neste projeto. "
+            "Use Python 3.12 ou 3.13 (build padrão com GIL)."
+        )
+
     setup_logging()
     yield
 

@@ -17,7 +17,7 @@ O GC Finder API é o backend responsável por:
 
 | Componente | Tecnologia |
 |---|---|
-| Linguagem | Python 3.12 |
+| Linguagem | Python 3.12 ou 3.13 (build padrão) |
 | Framework | FastAPI (async) |
 | ORM | SQLAlchemy 2.x async + Alembic |
 | Banco de dados | PostgreSQL 16 |
@@ -100,7 +100,9 @@ alembic/                 # Migrações de banco de dados
 
 - [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/install/)
 - [Poetry](https://python-poetry.org/docs/#installation) (para desenvolvimento local)
-- [Python 3.12+](https://www.python.org/downloads/) (para desenvolvimento local)
+- [Python 3.12 ou 3.13](https://www.python.org/downloads/) (para desenvolvimento local)
+
+> Observação: o projeto não suporta Python free-threaded (`3.14t`) no momento, devido a incompatibilidades de extensões nativas usadas pela stack async.
 - Chave da [Google Maps Geocoding API](https://developers.google.com/maps/documentation/geocoding/start) (para geocodificação)
 
 ## Como começar

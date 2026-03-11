@@ -113,6 +113,8 @@ Acesse a documentação interativa:
 
 Para trabalhar no código com autocomplete e debug na IDE:
 
+> Use Python 3.12 ou 3.13 (build padrão). Python free-threaded (`3.14t`) não é suportado neste projeto.
+
 ```bash
 # Instalar dependências (inclui grupo dev)
 poetry install
