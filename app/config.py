@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # JWT
     jwt_access_secret: str = "change-me-access"
     jwt_refresh_secret: str = "change-me-refresh"
-    jwt_access_expire_minutes: int = 15
+    jwt_access_expire_minutes: int = 120
     jwt_refresh_expire_days: int = 7
 
     # Google Maps
