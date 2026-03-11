@@ -7,11 +7,13 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.gc import Gc
 from app.models.gc_leader import GcLeader
 from app.models.gc_media import GcMedia
 from app.models.gc_meeting import GcMeeting
+from app.models.leader import Leader
 from app.schemas.gc import GcCreate, GcUpdate
 from app.schemas.gc_media import GcMediaCreate, GcMediaUpdate
 from app.schemas.gc_meeting import GcMeetingCreate, GcMeetingUpdate
@@ -30,6 +32,16 @@ class GcService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
+    def _gc_with_relations_query(self):
+        """Retorna query de GC com relações necessárias para serialização da resposta."""
+        return select(Gc).options(
+            selectinload(Gc.leader_associations)
+            .selectinload(GcLeader.leader)
+            .selectinload(Leader.contacts),
+            selectinload(Gc.meetings),
+            selectinload(Gc.medias),
+        )
+
     # ------------------------------------------------------------------ #
     # CRUD principal de GC
     # ------------------------------------------------------------------ #
@@ -37,13 +49,15 @@ class GcService:
     async def list_all(self, skip: int = 0, limit: int = 100) -> list[Gc]:
         """Retorna GCs ativos com paginação."""
         result = await self.db.execute(
-            select(Gc).offset(skip).limit(limit)
+            self._gc_with_relations_query().offset(skip).limit(limit)
         )
         return list(result.scalars().all())
 
     async def get_by_id(self, gc_id: UUID) -> Gc:
         """Busca um GC pelo ID. Levanta 404 se não encontrado."""
-        result = await self.db.execute(select(Gc).where(Gc.id == gc_id))
+        result = await self.db.execute(
+            self._gc_with_relations_query().where(Gc.id == gc_id)
+        )
         gc = result.scalars().first()
         if gc is None:
             raise HTTPException(
@@ -108,7 +122,7 @@ class GcService:
             self.db.add(media)
 
         await self.db.commit()
-        await self.db.refresh(gc)
+        gc = await self.get_by_id(gc.id)
         logger.info("GC criado: %s (id=%s)", gc.name, gc.id)
         return gc
 
@@ -188,7 +202,7 @@ class GcService:
                 self.db.add(media)
 
         await self.db.commit()
-        await self.db.refresh(gc)
+        gc = await self.get_by_id(gc.id)
         logger.info("GC atualizado: id=%s", gc.id)
         return gc
 
@@ -197,7 +211,7 @@ class GcService:
         gc = await self.get_by_id(gc_id)
         gc.is_active = False
         await self.db.commit()
-        await self.db.refresh(gc)
+        gc = await self.get_by_id(gc.id)
         logger.info("GC desativado: id=%s", gc.id)
         return gc
 
@@ -208,7 +222,12 @@ class GcService:
     async def link_leader(self, gc_id: UUID, leader_id: UUID) -> Gc:
         """Vincula um líder a um GC."""
         # Verifica se o GC existe
-        gc = await self.get_by_id(gc_id)
+        result = await self.db.execute(select(Gc.id).where(Gc.id == gc_id))
+        if result.scalars().first() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="GC não encontrado",
+            )
 
         # Verifica se o vínculo já existe
         result = await self.db.execute(
@@ -226,7 +245,9 @@ class GcService:
         link = GcLeader(gc_id=gc_id, leader_id=leader_id)
         self.db.add(link)
         await self.db.commit()
-        await self.db.refresh(gc)
+
+        # Recarrega o GC com todas as relações (incluindo leaders via leader_associations)
+        gc = await self.get_by_id(gc_id)
         logger.info("Líder %s vinculado ao GC %s", leader_id, gc_id)
         return gc
 
