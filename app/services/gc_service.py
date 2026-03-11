@@ -20,7 +20,6 @@ from app.services.geocoding_service import (
     fetch_coordinates,
     haversine_distance,
 )
-from app.utils.cep import sanitize_cep
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class GcService:
         gc = Gc(
             name=data.name,
             description=data.description,
-            zip_code=sanitize_cep(data.zip_code),
+            zip_code=data.zip_code,
             street=data.street,
             number=data.number,
             complement=data.complement,
@@ -125,7 +124,7 @@ class GcService:
 
         # Se campos de endereço foram alterados, recalcula coordenadas
         if "zip_code" in update_data:
-            update_data["zip_code"] = sanitize_cep(update_data["zip_code"])
+            # O schema já garante que o CEP está no formato correto (8 dígitos)
 
             full_address = (
                 f"{update_data['street']}, {update_data.get('number', gc.number) or 's/n'}, "

@@ -1,17 +1,23 @@
-"""Testes de validação dos campos de endereço no GcUpdate."""
+"""Testes de validação dos campos de endereço e CEP nos schemas GcCreate e GcUpdate."""
 
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.gc import GcUpdate
+from app.schemas.gc import GcCreate, GcUpdate
 
 # Campos obrigatórios quando qualquer campo de endereço é enviado
 ADDRESS_FIELDS = {
-    "zip_code": "13201-000",
+    "zip_code": "13201000",
     "street": "Rua Barão de Jundiaí",
     "neighborhood": "Centro",
     "city": "Jundiaí",
     "state": "SP",
+}
+
+# Payload mínimo válido para GcCreate
+GC_CREATE_BASE = {
+    "name": "GC Teste",
+    **ADDRESS_FIELDS,
 }
 
 
@@ -27,7 +33,7 @@ class TestGcUpdateAddressValidation:
     def test_update_with_all_address_fields(self):
         """Enviar todos os campos de endereço deve passar na validação."""
         data = GcUpdate(**ADDRESS_FIELDS)
-        assert data.zip_code == "13201-000"
+        assert data.zip_code == "13201000"
         assert data.street == "Rua Barão de Jundiaí"
         assert data.neighborhood == "Centro"
         assert data.city == "Jundiaí"
@@ -37,7 +43,7 @@ class TestGcUpdateAddressValidation:
         """Enviar todos os campos de endereço junto com outros campos deve funcionar."""
         data = GcUpdate(name="GC Atualizado", description="Nova descrição", **ADDRESS_FIELDS)
         assert data.name == "GC Atualizado"
-        assert data.zip_code == "13201-000"
+        assert data.zip_code == "13201000"
 
     @pytest.mark.parametrize("missing_field", ADDRESS_FIELDS.keys())
     def test_update_missing_one_address_field(self, missing_field: str):
@@ -49,7 +55,7 @@ class TestGcUpdateAddressValidation:
     def test_update_with_only_zip_code(self):
         """Enviar apenas o CEP sem os outros campos deve falhar."""
         with pytest.raises(ValidationError, match="obrigatórios"):
-            GcUpdate(zip_code="13201-000")
+            GcUpdate(zip_code="13201000")
 
     def test_update_with_only_city_and_state(self):
         """Enviar apenas cidade e estado sem os outros campos deve falhar."""
@@ -77,13 +83,84 @@ class TestGcUpdateAddressValidation:
         data = GcUpdate(number="500", complement="Bloco A", **ADDRESS_FIELDS)
         assert data.number == "500"
         assert data.complement == "Bloco A"
-        assert data.zip_code == "13201-000"
+        assert data.zip_code == "13201000"
 
     def test_error_message_lists_missing_fields(self):
         """A mensagem de erro deve listar os campos que faltam."""
         with pytest.raises(ValidationError) as exc_info:
-            GcUpdate(zip_code="13201-000", street="Rua X")
+            GcUpdate(zip_code="13201000", street="Rua X")
         error_msg = str(exc_info.value)
         assert "city" in error_msg
         assert "neighborhood" in error_msg
         assert "state" in error_msg
+
+
+class TestZipCodeValidation:
+    """Valida que o campo zip_code aceita apenas 8 dígitos numéricos."""
+
+    # --- GcCreate ---
+
+    def test_create_valid_zip_code_8_digits(self):
+        """CEP com 8 dígitos puros deve ser aceito."""
+        data = GcCreate(**GC_CREATE_BASE)
+        assert data.zip_code == "13201000"
+
+    def test_create_zip_code_with_mask_is_sanitized(self):
+        """CEP com máscara (00000-000) deve ser sanitizado para 8 dígitos."""
+        payload = {**GC_CREATE_BASE, "zip_code": "13201-000"}
+        data = GcCreate(**payload)
+        assert data.zip_code == "13201000"
+
+    def test_create_zip_code_too_short(self):
+        """CEP com menos de 8 dígitos deve falhar."""
+        payload = {**GC_CREATE_BASE, "zip_code": "1320100"}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcCreate(**payload)
+
+    def test_create_zip_code_too_long(self):
+        """CEP com mais de 8 dígitos deve falhar."""
+        payload = {**GC_CREATE_BASE, "zip_code": "132010001"}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcCreate(**payload)
+
+    def test_create_zip_code_with_letters(self):
+        """CEP com letras deve falhar (após remover não-dígitos, sobram menos de 8)."""
+        payload = {**GC_CREATE_BASE, "zip_code": "abcdefgh"}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcCreate(**payload)
+
+    def test_create_zip_code_empty(self):
+        """CEP vazio deve falhar."""
+        payload = {**GC_CREATE_BASE, "zip_code": ""}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcCreate(**payload)
+
+    # --- GcUpdate ---
+
+    def test_update_valid_zip_code_8_digits(self):
+        """CEP com 8 dígitos puros deve ser aceito no update."""
+        data = GcUpdate(**ADDRESS_FIELDS)
+        assert data.zip_code == "13201000"
+
+    def test_update_zip_code_with_mask_is_sanitized(self):
+        """CEP com máscara deve ser sanitizado no update."""
+        fields = {**ADDRESS_FIELDS, "zip_code": "13201-000"}
+        data = GcUpdate(**fields)
+        assert data.zip_code == "13201000"
+
+    def test_update_zip_code_too_short(self):
+        """CEP curto deve falhar no update."""
+        fields = {**ADDRESS_FIELDS, "zip_code": "1320"}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcUpdate(**fields)
+
+    def test_update_zip_code_too_long(self):
+        """CEP longo deve falhar no update."""
+        fields = {**ADDRESS_FIELDS, "zip_code": "132010001"}
+        with pytest.raises(ValidationError, match="8 dígitos"):
+            GcUpdate(**fields)
+
+    def test_update_zip_code_none_should_pass(self):
+        """CEP None (não enviado) deve ser aceito no update."""
+        data = GcUpdate(name="Teste")
+        assert data.zip_code is None

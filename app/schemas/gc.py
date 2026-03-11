@@ -3,11 +3,21 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+import re
+
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.schemas.gc_media import GcMediaCreate, GcMediaResponse
 from app.schemas.gc_meeting import GcMeetingCreate, GcMeetingResponse
 from app.schemas.leader import LeaderBrief
+
+
+def _validate_zip_code(value: str) -> str:
+    """Valida que o CEP contém exatamente 8 dígitos numéricos."""
+    digits = re.sub(r"\D", "", value)
+    if len(digits) != 8:
+        raise ValueError("O CEP deve conter exatamente 8 dígitos")
+    return digits
 
 
 class GcCreate(BaseModel):
@@ -25,6 +35,11 @@ class GcCreate(BaseModel):
     leaders: list[str] = []
     meetings: list[GcMeetingCreate] = []
     medias: list[GcMediaCreate] = []
+
+    @field_validator("zip_code")
+    @classmethod
+    def validate_zip_code(cls, value: str) -> str:
+        return _validate_zip_code(value)
 
 
 class GcUpdate(BaseModel):
@@ -45,6 +60,13 @@ class GcUpdate(BaseModel):
     medias: list[GcMediaCreate] | None = None
 
     _ADDRESS_FIELDS = {"zip_code", "street", "neighborhood", "city", "state"}
+
+    @field_validator("zip_code")
+    @classmethod
+    def validate_zip_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return _validate_zip_code(value)
 
     @model_validator(mode="after")
     def validate_address_fields(self) -> "GcUpdate":
