@@ -198,6 +198,33 @@ async def _get_or_create_leader(db: AsyncSession, leader_data: dict) -> Leader:
     return leader
 
 
+async def _ensure_leader_linked(
+    db: AsyncSession, gc: Gc, leader_data: dict
+) -> None:
+    """Garante que o líder existe e está vinculado ao GC."""
+    leader = await _get_or_create_leader(db, leader_data)
+    await db.flush()
+
+    # Verifica se o vínculo já existe antes de criar
+    result = await db.execute(
+        select(GcLeader).where(
+            GcLeader.gc_id == gc.id,
+            GcLeader.leader_id == leader.id,
+        )
+    )
+    existing_link = result.scalar_one_or_none()
+
+    if existing_link is not None:
+        logger.info(
+            f"Líder '{leader.name}' já vinculado ao GC '{gc.name}', pulando."
+        )
+        return
+
+    link = GcLeader(gc_id=gc.id, leader_id=leader.id)
+    db.add(link)
+    logger.info(f"Líder '{leader.name}' vinculado ao GC '{gc.name}'.")
+
+
 async def seed_gcs(db: AsyncSession) -> list[Gc]:
     """Cria GCs com líderes, encontros e mídias de forma idempotente."""
     gcs = []
@@ -205,48 +232,44 @@ async def seed_gcs(db: AsyncSession) -> list[Gc]:
     for gc_entry in GCS:
         gc_name = gc_entry["name"]
 
-        result = await db.execute(select(Gc).where(Gc.name == gc_name))
-        existing = result.scalar_one_or_none()
-        if existing is not None:
-            logger.info(f"GC '{gc_name}' já existe, pulando.")
-            gcs.append(existing)
-            continue
-
         # Separa dados aninhados das colunas do modelo Gc
         leaders_data = gc_entry.get("leaders", [])
         meetings_data = gc_entry.get("meetings", [])
         medias_data = gc_entry.get("medias", [])
         gc_columns = {k: v for k, v in gc_entry.items() if k not in NESTED_KEYS}
 
-        gc = Gc(**gc_columns)
-        db.add(gc)
-        await db.flush()
+        result = await db.execute(select(Gc).where(Gc.name == gc_name))
+        gc = result.scalar_one_or_none()
 
-        # Cria/busca líderes e vincula ao GC
-        for leader_data in leaders_data:
-            leader = await _get_or_create_leader(db, leader_data)
+        if gc is not None:
+            logger.info(f"GC '{gc_name}' já existe, validando líderes.")
+        else:
+            gc = Gc(**gc_columns)
+            db.add(gc)
             await db.flush()
 
-            link = GcLeader(gc_id=gc.id, leader_id=leader.id)
-            db.add(link)
-            logger.info(f"Líder '{leader.name}' vinculado ao GC '{gc_name}'.")
+            # Cria encontros do GC
+            for meeting_data in meetings_data:
+                meeting = GcMeeting(gc_id=gc.id, **meeting_data)
+                db.add(meeting)
+                logger.info(
+                    f"Encontro criado para o GC '{gc_name}' "
+                    f"(dia {meeting_data['weekday']})."
+                )
 
-        # Cria encontros do GC
-        for meeting_data in meetings_data:
-            meeting = GcMeeting(gc_id=gc.id, **meeting_data)
-            db.add(meeting)
-            logger.info(
-                f"Encontro criado para o GC '{gc_name}' (dia {meeting_data['weekday']})."
-            )
+            # Cria mídias do GC
+            for media_data in medias_data:
+                media = GcMedia(gc_id=gc.id, **media_data)
+                db.add(media)
+                logger.info(f"Mídia criada para o GC '{gc_name}'.")
 
-        # Cria mídias do GC
-        for media_data in medias_data:
-            media = GcMedia(gc_id=gc.id, **media_data)
-            db.add(media)
-            logger.info(f"Mídia criada para o GC '{gc_name}'.")
+            logger.info(f"GC '{gc_name}' criado com sucesso.")
+
+        # Sempre valida e vincula líderes, mesmo para GCs já existentes
+        for leader_data in leaders_data:
+            await _ensure_leader_linked(db, gc, leader_data)
 
         gcs.append(gc)
-        logger.info(f"GC '{gc_name}' criado com sucesso.")
 
     await db.commit()
     for gc in gcs:
