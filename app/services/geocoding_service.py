@@ -80,10 +80,9 @@ async def fetch_coordinates(address: str) -> tuple[float, float] | None:
                 return None
 
             location = data["results"][0]["geometry"]["location"]
-            return (location["lat"], location["lng"])
-
+            return location["lat"], location["lng"]
         except httpx.HTTPError as exc:
-            logger.error("Erro ao geocodificar endereço '%s': %s", address, exc)
+            logger.error("Erro ao obter as coordenadas de geolocalização do endereço '%s': %s", address, exc)
             return None
 
 
