@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     @property
+    def async_database_url(self) -> str:
+        """Garante que a URL do banco use o driver asyncpg."""
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
 

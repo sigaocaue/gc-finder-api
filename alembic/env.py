@@ -16,8 +16,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Sobrescreve a URL do banco com a do settings
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Sobrescreve a URL do banco com a do settings (garante driver asyncpg)
+config.set_main_option("sqlalchemy.url", settings.async_database_url)
 
 target_metadata = Base.metadata
 
