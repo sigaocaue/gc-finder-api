@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # Banco de dados
     database_url: str = "postgresql+asyncpg://gcfinder:gcfinder@db:5432/gcfinder"
+    database_use_ssl: bool = False
 
     # Redis
     redis_url: str = "redis://redis:6379/0"
@@ -30,14 +31,6 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
-
-    @property
-    def async_database_url(self) -> str:
-        """Garante que a URL do banco use o driver asyncpg."""
-        url = self.database_url
-        if url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
 
     @property
     def cors_origins_list(self) -> list[str]:
