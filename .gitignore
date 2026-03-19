@@ -210,11 +210,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# AI Assistant
-.aiassistant
-.claude
-CLAUDE.md
-
 # Docker volumes
 .persistence
 
@@ -245,4 +240,3 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
-
