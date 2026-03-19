@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && poetry config virtualenvs.create false
 
 COPY . .
-RUN poetry install --no-interaction --no-ansi --without dev
+RUN poetry install --no-interaction --no-ansi --without dev --with ocr
 
 EXPOSE 8000
 

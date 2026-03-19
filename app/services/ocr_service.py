@@ -4,16 +4,27 @@ import asyncio
 import logging
 import time as time_module
 
-import easyocr
-
 logger = logging.getLogger(__name__)
 
+try:
+    import easyocr
+
+    _EASYOCR_AVAILABLE = True
+except ImportError:
+    _EASYOCR_AVAILABLE = False
+
 # Singleton do reader EasyOCR
-_reader: easyocr.Reader | None = None
+_reader = None
 
 
-def _get_reader() -> easyocr.Reader:
+def _get_reader():
     """Retorna a instância singleton do EasyOCR Reader."""
+    if not _EASYOCR_AVAILABLE:
+        raise RuntimeError(
+            "EasyOCR não está instalado. "
+            "Instale com: poetry install --with ocr"
+        )
+
     global _reader
     if _reader is None:
         logger.info("[ocr_service] Reader EasyOCR inicializado (primeira vez)")
