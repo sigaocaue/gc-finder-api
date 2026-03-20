@@ -44,11 +44,11 @@ router = APIRouter(
 )
 async def start_image_import(
     current_user: CurrentUser,
-    image: list[UploadFile] | None = File(None),
+    images: list[UploadFile] | None = File(None),
     images_urls: list[str] | None = Form(None),
 ):
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
-    has_files = image and any(f.filename for f in image)
+    has_files = images and any(f.filename for f in images)
     has_urls = images_urls and any(u.strip() for u in images_urls)
 
     if not has_files and not has_urls:
@@ -62,7 +62,7 @@ async def start_image_import(
 
     # Validação e salvamento de arquivos enviados
     if has_files:
-        for idx, upload in enumerate(image):
+        for idx, upload in enumerate(images):
             if not upload.filename:
                 continue
 
