@@ -26,6 +26,7 @@ from app.services.gc_image_import_service import (
     start_job,
 )
 from app.services.gc_image_save_service import GcImageSaveService
+from app.services.ocr.factory import validate_ocr_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,17 @@ async def start_image_import(
     current_user: CurrentUser,
     images: list[UploadFile] | None = File(None),
     images_urls: list[str] | None = Form(None),
+    ocr_service: str = Form("easyocr"),
 ):
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
+    # Valida o serviço OCR escolhido
+    try:
+        validated_ocr = validate_ocr_service(ocr_service)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
     provided_image_names = [
         upload.filename
         for upload in (images or [])
@@ -147,7 +157,7 @@ async def start_image_import(
 
     # Dispara processamento em background
     asyncio.create_task(
-        process_image_job(job_id, renamed_paths, url_list)
+        process_image_job(job_id, renamed_paths, url_list, validated_ocr)
     )
     logger.info("[gc_image_import] Job %s iniciado em background", job_id)
 

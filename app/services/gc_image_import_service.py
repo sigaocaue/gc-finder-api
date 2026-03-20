@@ -14,7 +14,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.services.geocoding_service import fetch_coordinates, fetch_zip_code
 from app.services.image_parser_service import parse_ocr_text
-from app.services.ocr_service import extract_text
+from app.services.ocr.factory import get_ocr_service
 
 logger = logging.getLogger(__name__)
 
@@ -120,13 +120,18 @@ async def process_image_job(
     job_id: str,
     image_paths: list[Path],
     image_urls: list[str],
+    ocr_service_name: str = "easyocr",
 ) -> None:
     """Processa o job de extração em background."""
     redis_client = _get_redis()
     temp_files: list[Path] = []
+    ocr = get_ocr_service(ocr_service_name)
 
     try:
-        logger.info("[gc_image_import] Job %s iniciado em background", job_id)
+        logger.info(
+            "[gc_image_import] Job %s iniciado em background (ocr=%s)",
+            job_id, ocr_service_name,
+        )
 
         # --- Etapa 1: Download de URLs para arquivos temporários ---
         all_image_paths = list(image_paths)
@@ -189,7 +194,7 @@ async def process_image_job(
                 progress=f"Executando OCR na imagem {img_path} ({img_idx}/{total})...",
             )
 
-            texts = await extract_text(str(img_path))
+            texts = await ocr.extract_text(str(img_path))
             if not texts:
                 logger.warning(
                     "[gc_image_import] Job %s — imagem %d/%d sem texto detectado, pulando",

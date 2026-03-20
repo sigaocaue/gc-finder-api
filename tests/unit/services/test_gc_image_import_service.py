@@ -24,6 +24,15 @@ from app.services.gc_image_import_service import (
 fake = Faker()
 
 
+def _mock_ocr_service(return_value=None, side_effect=None):
+    """Cria um mock de OcrService com extract_text configurado."""
+    ocr_mock = MagicMock()
+    ocr_mock.extract_text = AsyncMock(
+        return_value=return_value, side_effect=side_effect
+    )
+    return ocr_mock
+
+
 # ---------------------------------------------------------------------------
 # _job_key
 # ---------------------------------------------------------------------------
@@ -249,17 +258,18 @@ class TestProcessImageJobUrlDownload:
     """Testa o download de imagens por URL."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
     @patch("app.services.gc_image_import_service.httpx.AsyncClient")
     async def test_failed_url_download_sets_failed_state(
-        self, mock_http_cls, mock_get_redis
+        self, mock_http_cls, mock_get_redis, mock_get_ocr
     ):
         """Falha no download deve marcar o job como failed."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=[])
 
-        # Simula erro de rede no download
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(side_effect=Exception("Connection refused"))
         mock_http_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -267,20 +277,23 @@ class TestProcessImageJobUrlDownload:
 
         await process_image_job("job-1", [], ["https://example.com/img.jpg"])
 
-        # Verifica que o último set no Redis foi com status=failed
         last_set_call = redis_mock.set.call_args_list[-1]
         state = json.loads(last_set_call[0][1])
         assert state["status"] == "failed"
         assert "url" in state["error"].lower()
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
     @patch("app.services.gc_image_import_service.httpx.AsyncClient")
-    async def test_url_extension_detection(self, mock_http_cls, mock_get_redis):
+    async def test_url_extension_detection(
+        self, mock_http_cls, mock_get_redis, mock_get_ocr
+    ):
         """Deve detectar extensão .png na URL e pular imagem sem texto."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=[])
 
         mock_response = MagicMock()
         mock_response.content = b"\x89PNG\r\n\x1a\n"
@@ -290,14 +303,8 @@ class TestProcessImageJobUrlDownload:
         mock_http_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_http_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        with patch(
-            "app.services.gc_image_import_service.extract_text",
-            new_callable=AsyncMock,
-            return_value=[],
-        ):
-            await process_image_job("job-1", [], ["https://example.com/foto.png"])
+        await process_image_job("job-1", [], ["https://example.com/foto.png"])
 
-        # Sem texto em nenhuma imagem → nenhum dado válido → failed
         last_state = json.loads(redis_mock.set.call_args_list[-1][0][1])
         assert last_state["status"] == "failed"
         assert "nenhuma imagem" in last_state["error"].lower()
@@ -312,12 +319,14 @@ class TestProcessImageJobNoImages:
     """Testa o comportamento quando não há imagens disponíveis."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    async def test_no_images_sets_failed(self, mock_get_redis):
+    async def test_no_images_sets_failed(self, mock_get_redis, mock_get_ocr):
         """Sem imagens disponíveis deve marcar o job como failed."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=[])
 
         await process_image_job("job-1", [], [])
 
@@ -335,17 +344,16 @@ class TestProcessImageJobOcrEmpty:
     """Testa o comportamento quando o OCR não retorna texto."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch(
-        "app.services.gc_image_import_service.extract_text",
-        new_callable=AsyncMock,
-        return_value=[],
-    )
-    async def test_empty_ocr_on_all_images_sets_failed(self, mock_ocr, mock_get_redis):
+    async def test_empty_ocr_on_all_images_sets_failed(
+        self, mock_get_redis, mock_get_ocr
+    ):
         """Nenhum texto em nenhuma imagem deve marcar o job como failed."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=[])
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
 
@@ -363,17 +371,17 @@ class TestProcessImageJobParsingIncomplete:
     """Testa quando o parsing não extrai nome ou endereço."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     async def test_missing_name_skips_image(
-        self, mock_parse, mock_ocr, mock_get_redis
+        self, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Imagem sem nome extraído deve ser pulada e job falha se nenhuma for válida."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-        mock_ocr.return_value = ["algum texto"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["algum texto"])
         mock_parse.return_value = MagicMock(name="", street="Rua A")
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
@@ -383,17 +391,17 @@ class TestProcessImageJobParsingIncomplete:
         assert "nenhuma imagem" in last_state["error"].lower()
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     async def test_missing_street_skips_image(
-        self, mock_parse, mock_ocr, mock_get_redis
+        self, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Imagem sem endereço extraído deve ser pulada."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-        mock_ocr.return_value = ["algum texto"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["algum texto"])
         mock_parse.return_value = MagicMock(name="GC Teste", street="")
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
@@ -411,8 +419,8 @@ class TestProcessImageJobSuccess:
     """Testa o fluxo completo de sucesso."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
         "app.services.gc_image_import_service.fetch_zip_code",
@@ -423,14 +431,15 @@ class TestProcessImageJobSuccess:
         new_callable=AsyncMock,
     )
     async def test_full_success_flow(
-        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Fluxo completo deve terminar com status=done e resultado com CEP."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.return_value = ["GC Central - Rua A, 100"]
+        mock_get_ocr.return_value = _mock_ocr_service(
+            return_value=["GC Central - Rua A, 100"]
+        )
 
         from app.schemas.gc_image_import import GcExtractedData
 
@@ -458,8 +467,8 @@ class TestProcessImageJobSuccess:
         assert last_state["result"][0]["longitude"] == -46.897
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
         "app.services.gc_image_import_service.fetch_zip_code",
@@ -470,14 +479,13 @@ class TestProcessImageJobSuccess:
         new_callable=AsyncMock,
     )
     async def test_success_without_zip_code(
-        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Deve concluir com sucesso mesmo sem CEP."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.return_value = ["GC Central"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["GC Central"])
 
         from app.schemas.gc_image_import import GcExtractedData
 
@@ -498,8 +506,8 @@ class TestProcessImageJobSuccess:
         assert last_state["result"][0]["zip_code"] is None
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
         "app.services.gc_image_import_service.fetch_zip_code",
@@ -510,14 +518,13 @@ class TestProcessImageJobSuccess:
         new_callable=AsyncMock,
     )
     async def test_success_without_coordinates(
-        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Deve concluir com sucesso mesmo sem coordenadas."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.return_value = ["GC Norte"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["GC Norte"])
 
         from app.schemas.gc_image_import import GcExtractedData
 
@@ -536,8 +543,8 @@ class TestProcessImageJobSuccess:
         assert last_state["result"][0]["latitude"] is None
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
         "app.services.gc_image_import_service.fetch_zip_code",
@@ -548,14 +555,13 @@ class TestProcessImageJobSuccess:
         new_callable=AsyncMock,
     )
     async def test_multiple_images_return_list(
-        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Múltiplas imagens devem gerar uma lista com um resultado por imagem."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.return_value = ["texto"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["texto"])
 
         from app.schemas.gc_image_import import GcExtractedData
 
@@ -580,8 +586,8 @@ class TestProcessImageJobSuccess:
         assert last_state["result"][1]["name"] == "GC Beta"
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
         "app.services.gc_image_import_service.fetch_zip_code",
@@ -592,14 +598,13 @@ class TestProcessImageJobSuccess:
         new_callable=AsyncMock,
     )
     async def test_progress_updates_sequence(
-        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_get_redis, mock_get_ocr
     ):
         """Deve atualizar o progresso em cada etapa do processamento."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.return_value = ["texto"]
+        mock_get_ocr.return_value = _mock_ocr_service(return_value=["texto"])
 
         from app.schemas.gc_image_import import GcExtractedData
 
@@ -612,7 +617,6 @@ class TestProcessImageJobSuccess:
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
 
-        # Coleta todos os estados salvos no Redis
         all_states = [
             json.loads(call[0][1]) for call in redis_mock.set.call_args_list
         ]
@@ -620,7 +624,6 @@ class TestProcessImageJobSuccess:
 
         assert "processing" in statuses
         assert "done" in statuses
-        # processing deve vir antes de done
         assert statuses.index("processing") < statuses.index("done")
 
 
@@ -633,15 +636,16 @@ class TestProcessImageJobException:
     """Testa o tratamento de exceções inesperadas."""
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
-    async def test_unexpected_error_sets_failed(self, mock_ocr, mock_get_redis):
+    async def test_unexpected_error_sets_failed(self, mock_get_redis, mock_get_ocr):
         """Exceção inesperada deve marcar o job como failed."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.side_effect = RuntimeError("Erro inesperado no OCR")
+        mock_get_ocr.return_value = _mock_ocr_service(
+            side_effect=RuntimeError("Erro inesperado no OCR")
+        )
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
 
@@ -650,15 +654,16 @@ class TestProcessImageJobException:
         assert "erro inesperado" in last_state["error"].lower()
 
     @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service.get_ocr_service")
     @patch("app.services.gc_image_import_service._get_redis")
-    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
-    async def test_redis_closed_after_exception(self, mock_ocr, mock_get_redis):
+    async def test_redis_closed_after_exception(self, mock_get_redis, mock_get_ocr):
         """Deve fechar a conexão Redis mesmo após exceção."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
-
-        mock_ocr.side_effect = RuntimeError("boom")
+        mock_get_ocr.return_value = _mock_ocr_service(
+            side_effect=RuntimeError("boom")
+        )
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
 
