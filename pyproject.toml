@@ -2,9 +2,7 @@
 name = "gc-finder-api"
 version = "0.1.0"
 description = "API REST para localização de Grupos de Crescimento (GCs)"
-authors = [
-    { name = "Caue Prado", email = "caue.prado0@gmail.com" }
-]
+authors = ["Caue Prado <caue.prado0@gmail.com>"]
 packages = [
     { include = "app" },
     { include = "seeds" },
