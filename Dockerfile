@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 ARG APP_ENV=development
-RUN if [ "$APP_ENV" = "production" ]; then \
+RUN APP_ENV_LOWER=$(echo "$APP_ENV" | tr '[:upper:]' '[:lower:]') && \
+    if [ "$APP_ENV_LOWER" = "production" ]; then \
         poetry install --no-interaction --no-ansi --without dev --with ocr; \
     else \
         poetry install --no-interaction --no-ansi --with dev,ocr; \
