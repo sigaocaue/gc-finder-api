@@ -1,4 +1,4 @@
-"""Testes de validação da rota POST /api/v1/gcs/import/image."""
+"""Testes da rota POST /api/v1/gcs/import/image — validação de entrada."""
 
 import io
 import uuid
@@ -20,7 +20,9 @@ def _make_upload(filename: str, content: bytes = FAKE_IMAGE_CONTENT):
     return "images", (filename, io.BytesIO(content), "application/octet-stream")
 
 
-# --- Sem imagem nem URL ---
+# ---------------------------------------------------------------------------
+# Sem imagem nem URL
+# ---------------------------------------------------------------------------
 
 
 class TestNoInput:
@@ -43,7 +45,9 @@ class TestNoInput:
         assert resp.status_code == 400
 
 
-# --- Validação de extensão de arquivos ---
+# ---------------------------------------------------------------------------
+# Validação de extensão de arquivos
+# ---------------------------------------------------------------------------
 
 
 class TestFileExtensionValidation:
@@ -78,7 +82,9 @@ class TestFileExtensionValidation:
         assert any("c.webp" in msg for msg in detail)
 
 
-# --- Validação de tamanho de arquivos ---
+# ---------------------------------------------------------------------------
+# Validação de tamanho de arquivos
+# ---------------------------------------------------------------------------
 
 
 class TestFileSizeValidation:
@@ -111,7 +117,9 @@ class TestFileSizeValidation:
         assert resp.status_code == 202
 
 
-# --- Validação de URLs ---
+# ---------------------------------------------------------------------------
+# Validação de URLs
+# ---------------------------------------------------------------------------
 
 
 class TestUrlValidation:
@@ -178,7 +186,7 @@ class TestUrlValidation:
         """URL http válida deve ser aceita."""
         mock_start.return_value = str(uuid.uuid4())
         resp = client.post(
-            ENDPOINT, data={"images_urls": ["http://example.com/img.png"]}
+            ENDPOINT, data={"images_urls": [fake.url(schemes=["http"])]}
         )
         assert resp.status_code == 202
 
@@ -188,12 +196,14 @@ class TestUrlValidation:
         """URL https válida deve ser aceita."""
         mock_start.return_value = str(uuid.uuid4())
         resp = client.post(
-            ENDPOINT, data={"images_urls": ["https://example.com/img.jpg"]}
+            ENDPOINT, data={"images_urls": [fake.url(schemes=["https"])]}
         )
         assert resp.status_code == 202
 
 
-# --- Acumulação de erros (múltiplos tipos) ---
+# ---------------------------------------------------------------------------
+# Acumulação de erros (múltiplos tipos)
+# ---------------------------------------------------------------------------
 
 
 class TestErrorAccumulation:
@@ -234,7 +244,6 @@ class TestErrorAccumulation:
         )
         assert resp.status_code == 400
         detail = resp.json()["detail"]
-        # 1 extensão inválida + 1 tamanho excedido + 1 URL vazia + 1 URL inválida
         assert len(detail) == 4
 
     def test_mixed_valid_and_invalid_still_returns_errors(self, client):
@@ -242,11 +251,10 @@ class TestErrorAccumulation:
         resp = client.post(
             ENDPOINT,
             files=[_make_upload("boa.png"), _make_upload("ruim.gif")],
-            data={"images_urls": ["https://ok.com/img.png", "invalida"]},
+            data={"images_urls": [fake.url(), "invalida"]},
         )
         assert resp.status_code == 400
         detail = resp.json()["detail"]
-        # 1 extensão inválida + 1 URL inválida
         assert len(detail) == 2
 
     def test_error_detail_is_list(self, client):
@@ -265,15 +273,15 @@ class TestErrorAccumulation:
         )
         assert resp.status_code == 400
         detail = resp.json()["detail"]
-        # Erros de arquivo mencionam o nome
         assert any("a.gif" in msg for msg in detail)
         assert any("b.bmp" in msg for msg in detail)
-        # Erros de URL mencionam o índice
         assert any("images_urls[0]" in msg for msg in detail)
         assert any("images_urls[1]" in msg for msg in detail)
 
 
-# --- Caso de sucesso ---
+# ---------------------------------------------------------------------------
+# Caso de sucesso
+# ---------------------------------------------------------------------------
 
 
 class TestSuccessCase:
@@ -285,7 +293,7 @@ class TestSuccessCase:
         """Upload válido deve retornar 202 com job_id e stream_url."""
         job_id = str(uuid.uuid4())
         mock_start.return_value = job_id
-        resp = client.post(ENDPOINT, files=[_make_upload("foto.jpg")])
+        resp = client.post(ENDPOINT, files=[_make_upload(fake.file_name(extension="jpg"))])
         assert resp.status_code == 202
         body = resp.json()
         assert body["data"]["job_id"] == job_id
@@ -299,7 +307,7 @@ class TestSuccessCase:
         """Enviar apenas URL válida (sem arquivo) deve retornar 202."""
         mock_start.return_value = str(uuid.uuid4())
         resp = client.post(
-            ENDPOINT, data={"images_urls": ["https://example.com/img.png"]}
+            ENDPOINT, data={"images_urls": [fake.url()]}
         )
         assert resp.status_code == 202
 
@@ -311,6 +319,39 @@ class TestSuccessCase:
         resp = client.post(
             ENDPOINT,
             files=[_make_upload("a.png"), _make_upload("b.jpeg")],
-            data={"images_urls": ["https://example.com/c.jpg"]},
+            data={"images_urls": [fake.url()]},
         )
         assert resp.status_code == 202
+
+    @patch("app.routers.gc_image_import.process_image_job", new_callable=AsyncMock)
+    @patch("app.routers.gc_image_import.start_job", new_callable=AsyncMock)
+    def test_response_message_is_present(self, mock_start, mock_process, client):
+        """A resposta de sucesso deve conter uma mensagem informativa."""
+        mock_start.return_value = str(uuid.uuid4())
+        resp = client.post(ENDPOINT, files=[_make_upload("img.png")])
+        assert resp.status_code == 202
+        body = resp.json()
+        assert "stream_url" in body["message"].lower()
+
+    @patch("app.routers.gc_image_import.process_image_job", new_callable=AsyncMock)
+    @patch("app.routers.gc_image_import.start_job", new_callable=AsyncMock)
+    def test_start_job_called_with_url_list(self, mock_start, mock_process, client):
+        """start_job deve receber a lista de URLs validadas."""
+        mock_start.return_value = str(uuid.uuid4())
+        url = fake.url()
+        client.post(ENDPOINT, data={"images_urls": [url]})
+        _, kwargs = mock_start.call_args
+        # Segundo argumento posicional é a lista de URLs
+        called_urls = mock_start.call_args[0][1]
+        assert url in called_urls
+
+    @patch("app.routers.gc_image_import.process_image_job", new_callable=AsyncMock)
+    @patch("app.routers.gc_image_import.start_job", new_callable=AsyncMock)
+    def test_process_image_job_called_in_background(self, mock_start, mock_process, client):
+        """process_image_job deve ser disparado após criação do job."""
+        job_id = str(uuid.uuid4())
+        mock_start.return_value = job_id
+        client.post(ENDPOINT, files=[_make_upload("foto.png")])
+        mock_process.assert_called_once()
+        # Primeiro argumento é o job_id
+        assert mock_process.call_args[0][0] == job_id

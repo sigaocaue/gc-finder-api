@@ -49,6 +49,24 @@ async def start_image_import(
     images_urls: list[str] | None = Form(None),
 ):
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
+    provided_image_names = [
+        upload.filename
+        for upload in (images or [])
+        if upload and upload.filename
+    ]
+    provided_image_urls = [
+        raw_url.strip()
+        for raw_url in (images_urls or [])
+        if raw_url and raw_url.strip()
+    ]
+    logger.info(
+        "[gc_image_import] User %s (%s) requested image import "
+        "(files=%s, urls=%s)",
+        current_user.id,
+        current_user.email,
+        provided_image_names,
+        provided_image_urls,
+    )
     has_files = images and any(f.filename for f in images)
     has_urls = bool(images_urls and len(images_urls) > 0)
 
@@ -153,6 +171,12 @@ async def stream_job_status(
     current_user: CurrentUser,
 ):
     """Stream SSE com atualizações de status do job de extração."""
+    logger.info(
+        "[gc_image_import] User %s (%s) requested job stream %s",
+        current_user.id,
+        current_user.email,
+        job_id,
+    )
 
     # Verifica se o job existe
     initial_state = await get_job_state(job_id)
@@ -242,6 +266,18 @@ async def save_imported_gc(
     db: DbSession,
 ):
     """Cadastra GC, líderes, contatos e encontros no banco de dados."""
+    logger.info(
+        "[gc_image_import] User %s (%s) saving imported GC "
+        "name=%s street=%s city=%s state=%s leaders=%s meetings=%s",
+        current_user.id,
+        current_user.email,
+        body.name,
+        body.street,
+        body.city,
+        body.state,
+        len(body.leaders),
+        len(body.meetings),
+    )
     # Validação de campos obrigatórios
     if not body.name or not body.name.strip():
         raise HTTPException(
