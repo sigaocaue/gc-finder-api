@@ -53,10 +53,13 @@ async def start_image_import(
         for upload in (images or [])
         if upload and upload.filename
     ]
+    # Normaliza URLs: o frontend pode enviar como itens separados ou como
+    # uma única string JSON/separada por vírgula dentro de um único campo
+    raw_urls = _normalize_url_list(images_urls or [])
     provided_image_urls = [
-        raw_url.strip()
-        for raw_url in (images_urls or [])
-        if raw_url and raw_url.strip()
+        url.strip()
+        for url in raw_urls
+        if url and url.strip()
     ]
     logger.info(
         "[gc_image_import] User %s (%s) requested image import "
@@ -67,7 +70,7 @@ async def start_image_import(
         provided_image_urls,
     )
     has_files = images and any(f.filename for f in images)
-    has_urls = bool(images_urls and len(images_urls) > 0)
+    has_urls = bool(raw_urls)
 
     if not has_files and not has_urls:
         raise HTTPException(
@@ -106,7 +109,7 @@ async def start_image_import(
 
     # Validação de URLs
     if has_urls:
-        for idx, raw_url in enumerate(images_urls):
+        for idx, raw_url in enumerate(raw_urls):
             stripped = raw_url.strip()
             if not stripped:
                 errors.append(f"images_urls[{idx}]: URL vazia não é permitida.")
@@ -296,6 +299,46 @@ async def save_imported_gc(
         data=GcResponse.model_validate(gc),
         message="GC cadastrado com sucesso.",
     )
+
+
+def _normalize_url_list(raw_items: list[str]) -> list[str]:
+    """Normaliza a lista de URLs recebida via Form multipart.
+
+    O frontend pode enviar as URLs de diferentes formas:
+    - Campos separados (cada URL é um item na lista) → já está correto
+    - Um único campo com JSON array: '["url1","url2"]' → precisa fazer parse
+    - Um único campo separado por vírgula: 'url1,url2' → precisa fazer split
+    """
+    if not raw_items:
+        return []
+
+    result: list[str] = []
+    for item in raw_items:
+        stripped = item.strip()
+        if not stripped:
+            result.append(item)
+            continue
+
+        # Tenta parse como JSON array
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    result.extend(str(v) for v in parsed)
+                    continue
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Tenta split por vírgula (somente se contiver vírgula e não parecer URL única)
+        if "," in stripped and "://" in stripped:
+            parts = [p.strip() for p in stripped.split(",")]
+            if all("://" in p for p in parts if p):
+                result.extend(parts)
+                continue
+
+        result.append(item)
+
+    return result
 
 
 def _format_sse(event: str, data: dict) -> str:

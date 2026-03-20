@@ -12,7 +12,6 @@ import httpx
 import redis.asyncio as aioredis
 
 from app.config import settings
-from app.schemas.gc_image_import import GcExtractedData
 from app.services.geocoding_service import fetch_coordinates
 from app.services.image_parser_service import parse_ocr_text
 from app.services.ocr_service import extract_text
@@ -25,6 +24,13 @@ JOB_KEY_PREFIX = "gc_import_job"
 # Extensões de imagem permitidas
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+def _normalize_text_field(value: str | None) -> str:
+    """Garante que apenas strings limpas sejam consideradas válidas para validações."""
+    if isinstance(value, str):
+        return value.strip()
+    return ""
 
 
 def _get_redis() -> aioredis.Redis:
@@ -201,9 +207,11 @@ async def process_image_job(
         )
 
         extracted = parse_ocr_text(all_texts)
+        name = _normalize_text_field(extracted.name)
+        street = _normalize_text_field(extracted.street)
 
         # Valida campos mínimos (nome + logradouro)
-        if not extracted.name or not extracted.street:
+        if not name or not street:
             await _set_job_state(
                 redis_client,
                 job_id,
