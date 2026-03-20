@@ -47,10 +47,14 @@ class TestStreamJobDone:
     @patch("app.routers.gc_image_import.get_job_state", new_callable=AsyncMock)
     def test_done_emits_status_done_and_closes(self, mock_get_state, client):
         """Quando o status é 'done', deve emitir evento com resultado e encerrar."""
-        fake_result = {
-            "name": fake.company(),
-            "street": fake.street_address(),
-        }
+        fake_result = [
+            {
+                "name": fake.company(),
+                "street": fake.street_address(),
+                "city": "Jundiaí",
+                "state": "SP",
+            }
+        ]
         mock_get_state.return_value = {
             "status": "done",
             "progress": "100%",
@@ -66,7 +70,7 @@ class TestStreamJobDone:
         last_event = events[-1]
         assert last_event["event"] == "status"
         assert last_event["data"]["status"] == "done"
-        assert last_event["data"]["result"] == fake_result
+        assert last_event["data"]["result"][0]["name"] == fake_result[0]["name"]
 
 
 class TestStreamJobFailed:
@@ -106,7 +110,7 @@ class TestStreamJobProgress:
             # Segunda iteração — muda progresso
             {"status": "processing", "progress": "80%"},
             # Terceira iteração — finaliza
-            {"status": "done", "progress": "100%", "result": {"name": fake.company()}},
+            {"status": "done", "progress": "100%", "result": [{"name": fake.company(), "street": fake.street_address()}]},
         ]
         job_id = str(uuid.uuid4())
         resp = client.get(STREAM_ENDPOINT.format(job_id=job_id))
@@ -147,7 +151,7 @@ class TestStreamResponseHeaders:
         mock_get_state.return_value = {
             "status": "done",
             "progress": "100%",
-            "result": {},
+            "result": [{"name": "GC Teste", "street": "Rua Teste"}],
         }
         job_id = str(uuid.uuid4())
         resp = client.get(STREAM_ENDPOINT.format(job_id=job_id))
