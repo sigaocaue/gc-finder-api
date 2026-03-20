@@ -117,6 +117,44 @@ class TestSetJobState:
         state = json.loads(redis_mock.set.call_args[0][1])
         assert state["result"] == result
 
+    @pytest.mark.asyncio
+    async def test_stores_result_list(self):
+        """Permite salvar uma lista de resultados."""
+        redis_mock = AsyncMock()
+        redis_mock.get = AsyncMock(return_value=None)
+        result_list = [
+            {"name": "GC Teste 1", "street": "Rua A"},
+            {"name": "GC Teste 2", "street": "Rua B"},
+        ]
+
+        await _set_job_state(
+            redis_mock,
+            "job-1",
+            status="done",
+            result=result_list,
+            created_at="2026-01-01T00:00:00",
+        )
+
+        state = json.loads(redis_mock.set.call_args[0][1])
+        assert state["result"] == result_list
+
+    @pytest.mark.asyncio
+    async def test_allows_none_result(self):
+        """Resultado opcional não atrapalha o salvamento."""
+        redis_mock = AsyncMock()
+        redis_mock.get = AsyncMock(return_value=None)
+
+        await _set_job_state(
+            redis_mock,
+            "job-1",
+            status="processing",
+            result=None,
+            created_at="2026-01-01T00:00:00",
+        )
+
+        state = json.loads(redis_mock.set.call_args[0][1])
+        assert state["result"] is None
+
 
 # ---------------------------------------------------------------------------
 # get_job_state
@@ -377,13 +415,17 @@ class TestProcessImageJobSuccess:
     @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
+        "app.services.gc_image_import_service.fetch_zip_code",
+        new_callable=AsyncMock,
+    )
+    @patch(
         "app.services.gc_image_import_service.fetch_coordinates",
         new_callable=AsyncMock,
     )
     async def test_full_success_flow(
-        self, mock_geocoding, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
     ):
-        """Fluxo completo deve terminar com status=done e resultado."""
+        """Fluxo completo deve terminar com status=done e resultado com CEP."""
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
         mock_get_redis.return_value = redis_mock
@@ -401,6 +443,7 @@ class TestProcessImageJobSuccess:
             state="SP",
         )
         mock_parse.return_value = extracted
+        mock_zip.return_value = "13201000"
         mock_geocoding.return_value = (-23.185, -46.897)
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
@@ -410,6 +453,7 @@ class TestProcessImageJobSuccess:
         assert isinstance(last_state["result"], list)
         assert len(last_state["result"]) == 1
         assert last_state["result"][0]["name"] == "GC Central"
+        assert last_state["result"][0]["zip_code"] == "13201000"
         assert last_state["result"][0]["latitude"] == -23.185
         assert last_state["result"][0]["longitude"] == -46.897
 
@@ -418,11 +462,55 @@ class TestProcessImageJobSuccess:
     @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
+        "app.services.gc_image_import_service.fetch_zip_code",
+        new_callable=AsyncMock,
+    )
+    @patch(
+        "app.services.gc_image_import_service.fetch_coordinates",
+        new_callable=AsyncMock,
+    )
+    async def test_success_without_zip_code(
+        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
+    ):
+        """Deve concluir com sucesso mesmo sem CEP."""
+        redis_mock = AsyncMock()
+        redis_mock.get = AsyncMock(return_value=None)
+        mock_get_redis.return_value = redis_mock
+
+        mock_ocr.return_value = ["GC Central"]
+
+        from app.schemas.gc_image_import import GcExtractedData
+
+        extracted = GcExtractedData(
+            name="GC Central",
+            street="Rua A",
+            city="Jundiaí",
+            state="SP",
+        )
+        mock_parse.return_value = extracted
+        mock_zip.return_value = None
+        mock_geocoding.return_value = (-23.185, -46.897)
+
+        await process_image_job("job-1", [Path("/tmp/img.png")], [])
+
+        last_state = json.loads(redis_mock.set.call_args_list[-1][0][1])
+        assert last_state["status"] == "done"
+        assert last_state["result"][0]["zip_code"] is None
+
+    @pytest.mark.asyncio
+    @patch("app.services.gc_image_import_service._get_redis")
+    @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
+    @patch("app.services.gc_image_import_service.parse_ocr_text")
+    @patch(
+        "app.services.gc_image_import_service.fetch_zip_code",
+        new_callable=AsyncMock,
+    )
+    @patch(
         "app.services.gc_image_import_service.fetch_coordinates",
         new_callable=AsyncMock,
     )
     async def test_success_without_coordinates(
-        self, mock_geocoding, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
     ):
         """Deve concluir com sucesso mesmo sem coordenadas."""
         redis_mock = AsyncMock()
@@ -437,6 +525,7 @@ class TestProcessImageJobSuccess:
             name="GC Norte", street="Rua B", city="Jundiaí", state="SP"
         )
         mock_parse.return_value = extracted
+        mock_zip.return_value = None
         mock_geocoding.return_value = None
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])
@@ -451,11 +540,15 @@ class TestProcessImageJobSuccess:
     @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
+        "app.services.gc_image_import_service.fetch_zip_code",
+        new_callable=AsyncMock,
+    )
+    @patch(
         "app.services.gc_image_import_service.fetch_coordinates",
         new_callable=AsyncMock,
     )
     async def test_multiple_images_return_list(
-        self, mock_geocoding, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
     ):
         """Múltiplas imagens devem gerar uma lista com um resultado por imagem."""
         redis_mock = AsyncMock()
@@ -473,6 +566,7 @@ class TestProcessImageJobSuccess:
             name="GC Beta", street="Rua B", city="Itupeva", state="SP"
         )
         mock_parse.side_effect = [extracted_1, extracted_2]
+        mock_zip.return_value = "13201000"
         mock_geocoding.return_value = (-23.0, -46.0)
 
         await process_image_job(
@@ -490,11 +584,15 @@ class TestProcessImageJobSuccess:
     @patch("app.services.gc_image_import_service.extract_text", new_callable=AsyncMock)
     @patch("app.services.gc_image_import_service.parse_ocr_text")
     @patch(
+        "app.services.gc_image_import_service.fetch_zip_code",
+        new_callable=AsyncMock,
+    )
+    @patch(
         "app.services.gc_image_import_service.fetch_coordinates",
         new_callable=AsyncMock,
     )
     async def test_progress_updates_sequence(
-        self, mock_geocoding, mock_parse, mock_ocr, mock_get_redis
+        self, mock_geocoding, mock_zip, mock_parse, mock_ocr, mock_get_redis
     ):
         """Deve atualizar o progresso em cada etapa do processamento."""
         redis_mock = AsyncMock()
@@ -509,6 +607,7 @@ class TestProcessImageJobSuccess:
             name="GC", street="Rua X", city="Jundiaí", state="SP"
         )
         mock_parse.return_value = extracted
+        mock_zip.return_value = None
         mock_geocoding.return_value = (-23.0, -46.0)
 
         await process_image_job("job-1", [Path("/tmp/img.png")], [])

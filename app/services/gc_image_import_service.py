@@ -12,7 +12,7 @@ import httpx
 import redis.asyncio as aioredis
 
 from app.config import settings
-from app.services.geocoding_service import fetch_coordinates
+from app.services.geocoding_service import fetch_coordinates, fetch_zip_code
 from app.services.image_parser_service import parse_ocr_text
 from app.services.ocr_service import extract_text
 
@@ -48,7 +48,7 @@ async def _set_job_state(
     *,
     status: str,
     progress: str | None = None,
-    result: dict | None = None,
+    result: dict | None | list[dict] = None,
     error: str | None = None,
     created_at: str | None = None,
 ) -> None:
@@ -216,7 +216,29 @@ async def process_image_job(
                 )
                 continue
 
-            # --- Etapa 4: Geocoding ---
+            # --- Etapa 4: Busca de CEP ---
+            full_address = (
+                f"{extracted.street}, {extracted.number or 's/n'}, "
+                f"{extracted.neighborhood or ''}, {extracted.city} - "
+                f"{extracted.state}, Brasil"
+            )
+
+            if extracted.street and extracted.city and extracted.state:
+                await _set_job_state(
+                    redis_client,
+                    job_id,
+                    status="processing",
+                    progress=f"Buscando CEP da imagem {img_idx}/{total}...",
+                )
+
+                zip_code = await fetch_zip_code(full_address)
+                if zip_code:
+                    extracted.zip_code = zip_code
+                    logger.info("[geocoding] CEP encontrado: %s", zip_code)
+                else:
+                    logger.warning("[geocoding] CEP não encontrado — continuando sem CEP")
+
+            # --- Etapa 5: Geocoding ---
             await _set_job_state(
                 redis_client,
                 job_id,
@@ -224,11 +246,6 @@ async def process_image_job(
                 progress=f"Buscando coordenadas da imagem {img_idx}/{total}...",
             )
 
-            full_address = (
-                f"{extracted.street}, {extracted.number or 's/n'}, "
-                f"{extracted.neighborhood or ''}, {extracted.city} - "
-                f"{extracted.state}, Brasil"
-            )
             logger.info("[geocoding] Query: \"%s\"", full_address)
 
             coords = await fetch_coordinates(full_address)
@@ -245,7 +262,7 @@ async def process_image_job(
 
             results.append(extracted.model_dump(mode="json"))
 
-        # --- Etapa 5: Resultado final ---
+        # --- Etapa 6: Resultado final ---
         if not results:
             await _set_job_state(
                 redis_client,
