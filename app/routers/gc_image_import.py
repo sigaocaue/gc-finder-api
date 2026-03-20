@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.dependencies import CurrentUser, DbSession
@@ -19,6 +19,7 @@ from app.schemas.gc_image_import import (
     GcImportSaveRequest,
     GcImportStartResponse,
     GcJobStatusEvent,
+    ImageImportForm,
 )
 from app.services.gc_image_import_service import (
     ALLOWED_EXTENSIONS,
@@ -47,19 +48,20 @@ router = APIRouter(
 )
 async def start_image_import(
     current_user: CurrentUser,
-    images: list[UploadFile] | None = File(None),
-    images_urls: list[str] | None = Form(None),
-    ocr_service: str = Form("easyocr"),
+    form: ImageImportForm = Depends(),
 ) -> ApiResponse[GcImportStartResponse]:
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
-    # Valida o serviço OCR escolhido
+    # Valida o serviço OCR escolhido (o enum garante valores válidos,
+    # mas ainda precisamos checar disponibilidade no ambiente)
     try:
-        validated_ocr = validate_ocr_service(ocr_service)
+        validated_ocr = validate_ocr_service(form.ocr_service.value)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
+
+    images = form.images
     provided_image_names = [
         upload.filename
         for upload in (images or [])
@@ -67,7 +69,7 @@ async def start_image_import(
     ]
     # Normaliza URLs: o frontend pode enviar como itens separados ou como
     # uma única string JSON/separada por vírgula dentro de um único campo
-    raw_urls = _normalize_url_list(images_urls or [])
+    raw_urls = _normalize_url_list(form.images_urls or [])
     provided_image_urls = [
         url.strip()
         for url in raw_urls
@@ -75,11 +77,12 @@ async def start_image_import(
     ]
     logger.info(
         "[gc_image_import] User %s (%s) requested image import "
-        "(files=%s, urls=%s)",
+        "(files=%s, urls=%s, ocr=%s)",
         current_user.id,
         current_user.email,
         provided_image_names,
         provided_image_urls,
+        form.ocr_service.value,
     )
     has_files = images and any(f.filename for f in images)
     has_urls = bool(raw_urls)

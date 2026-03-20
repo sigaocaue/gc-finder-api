@@ -1,6 +1,47 @@
 """Schemas para importação de GC por imagem (extração OCR e salvamento)."""
 
+from enum import StrEnum
+
+from fastapi import File, Form, UploadFile
 from pydantic import BaseModel, Field
+
+
+# --- Enum de serviços OCR ---
+
+
+class OcrServiceName(StrEnum):
+    """Serviços OCR disponíveis para extração de texto de imagens."""
+
+    EASYOCR = "easyocr"
+    TESSERACT = "tesseract"
+    GOOGLE_DOCUMENTAI = "google_documentai"
+
+
+# --- Formulário multipart para POST /image ---
+
+
+class ImageImportForm:
+    """Agrupa os parâmetros do formulário multipart de importação de imagem.
+
+    Uso no endpoint: ``form: ImageImportForm = Depends()``
+    """
+
+    def __init__(
+        self,
+        images: list[UploadFile] | None = File(
+            None, description="Imagens para extração (upload direto)"
+        ),
+        images_urls: list[str] | None = Form(
+            None, description="URLs de imagens para extração"
+        ),
+        ocr_service: OcrServiceName = Form(
+            OcrServiceName.EASYOCR,
+            description="Serviço OCR a ser utilizado na extração",
+        ),
+    ) -> None:
+        self.images = images
+        self.images_urls = images_urls
+        self.ocr_service = ocr_service
 
 
 # --- Tipos compartilhados entre extração e salvamento ---
