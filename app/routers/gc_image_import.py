@@ -50,7 +50,7 @@ async def start_image_import(
 ):
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
     has_files = images and any(f.filename for f in images)
-    has_urls = images_urls and any(u.strip() for u in images_urls)
+    has_urls = bool(images_urls and len(images_urls) > 0)
 
     if not has_files and not has_urls:
         raise HTTPException(
