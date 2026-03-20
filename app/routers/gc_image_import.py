@@ -6,6 +6,7 @@ import logging
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -57,44 +58,62 @@ async def start_image_import(
             detail="Envie pelo menos uma imagem (arquivo ou URL).",
         )
 
+    errors: list[str] = []
     saved_paths: list[Path] = []
     url_list: list[str] = []
 
-    # Validação e salvamento de arquivos enviados
+    # Validação de arquivos enviados
     if has_files:
         for idx, upload in enumerate(images):
             if not upload.filename:
                 continue
 
-            # Valida extensão
             ext = Path(upload.filename).suffix.lower()
             if ext not in ALLOWED_EXTENSIONS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Extensão '{ext}' não permitida para '{upload.filename}'. "
-                        f"Extensões aceitas: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
-                    ),
+                errors.append(
+                    f"Extensão '{ext}' não permitida para '{upload.filename}'. "
+                    f"Extensões aceitas: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
                 )
+                continue
 
-            # Valida tamanho (lê o conteúdo)
             content = await upload.read()
             if len(content) > MAX_IMAGE_SIZE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Imagem '{upload.filename}' excede o tamanho máximo de 5MB."
-                    ),
+                errors.append(
+                    f"Imagem '{upload.filename}' excede o tamanho máximo de 5MB."
                 )
+                continue
 
-            # Salva em arquivo temporário (gera job_id depois, usa índice no nome)
             tmp_path = Path(tempfile.gettempdir()) / f"gc_import_{idx}_{upload.filename}"
             tmp_path.write_bytes(content)
             saved_paths.append(tmp_path)
 
-    # Valida URLs
+    # Validação de URLs
     if has_urls:
-        url_list = [u.strip() for u in images_urls if u.strip()]
+        for idx, raw_url in enumerate(images_urls):
+            stripped = raw_url.strip()
+            if not stripped:
+                errors.append(f"images_urls[{idx}]: URL vazia não é permitida.")
+                continue
+
+            parsed = urlparse(stripped)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                errors.append(
+                    f"images_urls[{idx}]: '{stripped}' não é uma URL válida."
+                )
+                continue
+
+            url_list.append(stripped)
+
+    # Retorna todos os erros acumulados de uma vez
+    if errors:
+        # Limpa arquivos temporários salvos antes do erro
+        for path in saved_paths:
+            path.unlink(missing_ok=True)
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=errors,
+        )
 
     # Cria o job
     job_id = await start_job(saved_paths, url_list)
