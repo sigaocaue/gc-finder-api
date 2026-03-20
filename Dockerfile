@@ -5,6 +5,8 @@ WORKDIR /app
 # Instala dependências do sistema e o Poetry
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    tesseract-ocr \
+    tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false

@@ -28,6 +28,8 @@ optional = true
 
 [tool.poetry.group.ocr.dependencies]
 easyocr = ">=1.7.0"
+pytesseract = ">=0.3.10"
+google-cloud-documentai = ">=2.20.0"
 Pillow = ">=10.0.0"
 
 [tool.poetry.group.dev.dependencies]
