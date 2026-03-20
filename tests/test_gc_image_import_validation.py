@@ -5,11 +5,14 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from faker import Faker
 from fastapi.testclient import TestClient
 
 from app.dependencies import get_current_user
 from app.main import app
 from app.models.user import User
+
+fake = Faker()
 
 
 # --- Fixtures ---
@@ -38,8 +41,8 @@ def client(fake_user):
 
 ENDPOINT = "/api/v1/gcs/import/image"
 
-# Conteúdo mínimo para simular uma imagem válida (< 5MB)
-FAKE_IMAGE_CONTENT = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+# Imagem PNG válida gerada pelo Faker (< 5MB)
+FAKE_IMAGE_CONTENT = fake.image(size=(10, 10), image_format="png")
 
 
 def _make_upload(filename: str, content: bytes = FAKE_IMAGE_CONTENT):
