@@ -44,7 +44,7 @@ FAKE_IMAGE_CONTENT = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 
 def _make_upload(filename: str, content: bytes = FAKE_IMAGE_CONTENT):
     """Cria tupla no formato esperado pelo TestClient para upload de arquivo."""
-    return ("images", (filename, io.BytesIO(content), "application/octet-stream"))
+    return "images", (filename, io.BytesIO(content), "application/octet-stream")
 
 
 # --- Sem imagem nem URL ---
@@ -173,7 +173,7 @@ class TestUrlValidation:
             "ftp://arquivo.com/img.png",
             "arquivo.png",
             "://sem-scheme.com",
-            "http://",
+            "https://",
             "just-text",
         ],
     )
