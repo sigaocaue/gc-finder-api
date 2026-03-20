@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        INSTALL_DEV: "true"
+        APP_ENV: ${APP_ENV:-development}
     container_name: gc_finder_api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
