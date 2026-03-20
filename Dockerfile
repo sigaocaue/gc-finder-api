@@ -14,11 +14,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copia apenas os arquivos de dependências primeiro (cache de layer)
 COPY pyproject.toml poetry.lock ./
 ARG APP_ENV=development
+# Grupos OCR a instalar (ex: "ocr-easyocr", "ocr-easyocr,ocr-tesseract", ou vazio)
+ARG OCR_GROUPS=ocr-easyocr
 RUN APP_ENV_LOWER=$(echo "$APP_ENV" | tr '[:upper:]' '[:lower:]') && \
     if [ "$APP_ENV_LOWER" = "production" ]; then \
-        poetry install --no-interaction --no-ansi --without dev --with ocr --no-root; \
+        BASE_CMD="poetry install --no-interaction --no-ansi --without dev --no-root"; \
     else \
-        poetry install --no-interaction --no-ansi --with dev,ocr --no-root; \
+        BASE_CMD="poetry install --no-interaction --no-ansi --with dev --no-root"; \
+    fi && \
+    if [ -n "$OCR_GROUPS" ]; then \
+        $BASE_CMD --with "$OCR_GROUPS"; \
+    else \
+        $BASE_CMD; \
     fi
 
 # Copia o restante do código

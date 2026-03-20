@@ -29,10 +29,23 @@ O GC Finder API é o backend responsável por:
 | Containerização | Docker + Docker Compose |
 | Gerenciador de pacotes | Poetry |
 
+## Serviços OCR
+
+A importação de GCs por imagem suporta 3 serviços OCR, instaláveis de forma independente:
+
+| Serviço | Grupo Poetry | Descrição |
+|---|---|---|
+| EasyOCR | `ocr-easyocr` | OCR baseado em deep learning (PyTorch). Boa precisão, imagem Docker maior (~2 GB) |
+| Tesseract | `ocr-tesseract` | OCR tradicional, leve e rápido. Requer binário `tesseract-ocr` no sistema |
+| Google Document AI | `ocr-documentai` | Serviço gerenciado do Google Cloud. Requer projeto e processador configurados |
+
+O serviço é escolhido por requisição via parâmetro `ocr_service` no endpoint `POST /api/v1/gcs/import/image`. Apenas serviços instalados e listados em `OCR_AVAILABLE_SERVICES` ficam disponíveis.
+
 ## Integrações externas
 
 - **ViaCEP** — Busca de endereço a partir do CEP (API pública)
 - **Google Maps Geocoding API** — Conversão de endereço em coordenadas lat/lng
+- **Google Document AI** — Extração de texto de imagens via OCR na nuvem (opcional)
 - **Google Forms** — Envio de interesse ao formulário oficial dos responsáveis de GCs
 
 ## Endpoints
@@ -64,6 +77,14 @@ O GC Finder API é o backend responsável por:
 ### Protegidos (requer autenticação)
 
 CRUD completo para GCs, líderes, encontros e mídias via `POST`, `PUT` e `DELETE` nos prefixos `/api/v1/gcs`, `/api/v1/leaders`, `/api/v1/gcs/{gc_id}/meetings` e `/api/v1/gcs/{gc_id}/medias`.
+
+### Importação de GC por imagem (requer autenticação)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/v1/gcs/import/image` | Envia imagens para extração OCR (retorna job_id) |
+| GET | `/api/v1/gcs/import/jobs/{job_id}/stream` | Acompanha progresso via SSE |
+| POST | `/api/v1/gcs/import/save` | Salva os dados extraídos como GC no banco |
 
 ### Admin (requer role `admin`)
 
