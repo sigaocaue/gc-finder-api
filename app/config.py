@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     google_documentai_project_id: str = ""
     google_documentai_location: str = "us"
     google_documentai_processor_id: str = ""
+    # JSON da service account do Google Cloud (conteúdo completo do arquivo .json)
+    google_cloud_credentials_json: str = ""
 
     # Google Forms
     google_forms_submit_url: str = ""

@@ -1,5 +1,6 @@
 """Serviço de OCR usando Google Document AI."""
 
+import json
 import logging
 import time as time_module
 
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from google.cloud import documentai_v1 as documentai
+    from google.oauth2 import service_account
 
     _DOCUMENTAI_AVAILABLE = True
 except ImportError:
@@ -23,7 +25,13 @@ def is_available() -> bool:
 class GoogleDocumentAiService(OcrService):
     """Implementação de OCR usando Google Document AI."""
 
-    def __init__(self, project_id: str, location: str, processor_id: str):
+    def __init__(
+        self,
+        project_id: str,
+        location: str,
+        processor_id: str,
+        credentials_json: str = "",
+    ):
         if not _DOCUMENTAI_AVAILABLE:
             raise RuntimeError(
                 "google-cloud-documentai não está instalado. "
@@ -32,7 +40,16 @@ class GoogleDocumentAiService(OcrService):
         self._project_id = project_id
         self._location = location
         self._processor_id = processor_id
-        self._client = documentai.DocumentProcessorServiceClient()
+
+        # Usa credenciais explícitas se fornecidas, senão tenta ADC
+        credentials = None
+        if credentials_json:
+            info = json.loads(credentials_json)
+            credentials = service_account.Credentials.from_service_account_info(info)
+
+        self._client = documentai.DocumentProcessorServiceClient(
+            credentials=credentials
+        )
         self._resource_name = self._client.processor_path(
             project_id, location, processor_id
         )

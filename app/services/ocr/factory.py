@@ -75,6 +75,7 @@ def get_ocr_service(ocr_service: str) -> OcrService:
             project_id=settings.google_documentai_project_id,
             location=settings.google_documentai_location,
             processor_id=settings.google_documentai_processor_id,
+            credentials_json=settings.google_cloud_credentials_json,
         )
 
     raise ValueError(f"Serviço OCR '{ocr_service}' não implementado.")
