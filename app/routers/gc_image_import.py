@@ -15,8 +15,10 @@ from app.dependencies import CurrentUser, DbSession
 from app.schemas.common import ApiResponse
 from app.schemas.gc import GcResponse
 from app.schemas.gc_image_import import (
+    GcHeartbeatEvent,
     GcImportSaveRequest,
     GcImportStartResponse,
+    GcJobStatusEvent,
 )
 from app.services.gc_image_import_service import (
     ALLOWED_EXTENSIONS,
@@ -48,7 +50,7 @@ async def start_image_import(
     images: list[UploadFile] | None = File(None),
     images_urls: list[str] | None = Form(None),
     ocr_service: str = Form("easyocr"),
-):
+) -> ApiResponse[GcImportStartResponse]:
     """Inicia a extração assíncrona de dados de GC a partir de imagens."""
     # Valida o serviço OCR escolhido
     try:
@@ -181,7 +183,7 @@ async def start_image_import(
 async def stream_job_status(
     job_id: str,
     current_user: CurrentUser,
-):
+) -> StreamingResponse:
     """Stream SSE com atualizações de status do job de extração."""
     logger.info(
         "[gc_image_import] User %s (%s) requested job stream %s",
@@ -207,11 +209,11 @@ async def stream_job_status(
             state = await get_job_state(job_id)
 
             if state is None:
-                # Job expirou ou foi removido
-                yield _format_sse(
-                    "status",
-                    {"status": "failed", "error": "Job não encontrado ou expirado."},
+                event = GcJobStatusEvent(
+                    status="failed",
+                    error="Job não encontrado ou expirado.",
                 )
+                yield event.to_sse()
                 break
 
             current_status = state.get("status")
@@ -222,22 +224,25 @@ async def stream_job_status(
                 heartbeat_counter = 0
 
                 if current_status == "done":
-                    yield _format_sse(
-                        "status",
-                        {"status": "done", "result": state.get("result")},
+                    event = GcJobStatusEvent(
+                        status="done",
+                        result=state.get("result"),
                     )
+                    yield event.to_sse()
                     break
                 elif current_status == "failed":
-                    yield _format_sse(
-                        "status",
-                        {"status": "failed", "error": state.get("error")},
+                    event = GcJobStatusEvent(
+                        status="failed",
+                        error=state.get("error"),
                     )
+                    yield event.to_sse()
                     break
                 else:
-                    yield _format_sse(
-                        "status",
-                        {"status": current_status, "progress": current_progress},
+                    event = GcJobStatusEvent(
+                        status=current_status,
+                        progress=current_progress,
                     )
+                    yield event.to_sse()
 
                 last_status = current_status
                 last_progress = current_progress
@@ -247,10 +252,10 @@ async def stream_job_status(
             # Heartbeat a cada 15 segundos (15 iterações de 1s)
             if heartbeat_counter >= 15:
                 heartbeat_counter = 0
-                yield _format_sse(
-                    "heartbeat",
-                    {"ts": datetime.now(timezone.utc).isoformat()},
+                heartbeat = GcHeartbeatEvent(
+                    ts=datetime.now(timezone.utc).isoformat(),
                 )
+                yield heartbeat.to_sse()
 
             await asyncio.sleep(1)
 
@@ -349,9 +354,3 @@ def _normalize_url_list(raw_items: list[str]) -> list[str]:
         result.append(item)
 
     return result
-
-
-def _format_sse(event: str, data: dict) -> str:
-    """Formata um evento SSE."""
-    json_data = json.dumps(data, ensure_ascii=False)
-    return f"event: {event}\ndata: {json_data}\n\n"

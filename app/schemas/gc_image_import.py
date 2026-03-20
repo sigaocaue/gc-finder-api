@@ -70,7 +70,45 @@ class GcJobStatusEvent(BaseModel):
     result: list[GcExtractedData] | None = None
     error: str | None = None
 
+    def to_sse(self, event: str = "status") -> str:
+        """Serializa o evento no formato SSE."""
+        import json
+
+        json_data = json.dumps(
+            self.model_dump(exclude_none=True), ensure_ascii=False
+        )
+        return f"event: {event}\ndata: {json_data}\n\n"
+
+
+class GcHeartbeatEvent(BaseModel):
+    """Evento de heartbeat SSE."""
+
+    ts: str
+
+    def to_sse(self) -> str:
+        """Serializa o heartbeat no formato SSE."""
+        import json
+
+        json_data = json.dumps(self.model_dump(), ensure_ascii=False)
+        return f"event: heartbeat\ndata: {json_data}\n\n"
+
 
 # --- POST /save ---
-# Reutiliza GcExtractedData como corpo do request de salvamento
-GcImportSaveRequest = GcExtractedData
+
+
+class GcImportSaveRequest(BaseModel):
+    """Dados para salvar um GC importado no banco de dados."""
+
+    name: str
+    description: str | None = None
+    zip_code: str | None = None
+    street: str
+    number: str | None = None
+    complement: str | None = None
+    neighborhood: str | None = None
+    city: str = "Jundiaí"
+    state: str = "SP"
+    latitude: float | None = None
+    longitude: float | None = None
+    leaders: list[LeaderExtracted] = []
+    meetings: list[MeetingExtracted] = []
