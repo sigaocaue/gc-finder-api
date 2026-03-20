@@ -1,13 +1,14 @@
 """Fixtures compartilhadas entre todos os testes."""
 
 import uuid
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from faker import Faker
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, require_admin
 from app.main import app
 from app.models.user import User
 
@@ -23,6 +24,20 @@ def fake_user():
     user.email = fake.email()
     user.role = "editor"
     user.is_active = True
+    user.created_at = datetime.now()
+    return user
+
+
+@pytest.fixture()
+def fake_admin():
+    """Usuário admin fake para rotas que exigem AdminUser."""
+    user = MagicMock(spec=User)
+    user.id = uuid.uuid4()
+    user.name = fake.name()
+    user.email = fake.email()
+    user.role = "admin"
+    user.is_active = True
+    user.created_at = datetime.now()
     return user
 
 
@@ -40,6 +55,17 @@ def mock_db():
 def client(fake_user, mock_db):
     """TestClient com dependências de autenticação e banco sobrescritas."""
     app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def admin_client(fake_admin, mock_db):
+    """TestClient com dependências de admin e banco sobrescritas."""
+    app.dependency_overrides[get_current_user] = lambda: fake_admin
+    app.dependency_overrides[require_admin] = lambda: fake_admin
     app.dependency_overrides[get_db] = lambda: mock_db
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c

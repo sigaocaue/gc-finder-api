@@ -15,7 +15,6 @@ from app.dependencies import CurrentUser, DbSession
 from app.schemas.common import ApiResponse
 from app.schemas.gc import GcResponse
 from app.schemas.gc_image_import import (
-    GcExtractedData,
     GcImportSaveRequest,
     GcImportStartResponse,
 )
