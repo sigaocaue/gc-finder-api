@@ -185,3 +185,12 @@ poetry lock
 docker-compose build --no-cache api
 docker-compose up -d
 ```
+
+### Reinstalar dependências dentro do contêiner
+
+Quando for preciso reinstalar todas as dependências (por exemplo, ao limpar caches ou ao mover o projeto para outro ambiente), use este comando dentro do contêiner da API para puxar os grupos `dev` e `ocr`:
+
+```bash
+docker-compose up -d api
+docker-compose exec api poetry install --with dev,ocr
+```
