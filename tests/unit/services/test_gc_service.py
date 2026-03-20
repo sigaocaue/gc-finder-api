@@ -75,4 +75,3 @@ async def test_link_leader_returns_gc_reloaded_with_new_leader():
     service.get_by_id.assert_awaited_once_with(gc_id)
     db.commit.assert_awaited_once()
     db.add.assert_called_once()
-
