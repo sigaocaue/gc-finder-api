@@ -176,92 +176,95 @@ async def process_image_job(
             )
             return
 
-        # --- Etapa 2: OCR em todas as imagens ---
-        await _set_job_state(
-            redis_client,
-            job_id,
-            status="processing",
-            progress="Executando OCR na imagem...",
-        )
+        # Processa cada imagem separadamente (OCR → parsing → geocoding)
+        results: list[dict] = []
+        total = len(all_image_paths)
 
-        all_texts: list[str] = []
-        for img_path in all_image_paths:
+        for img_idx, img_path in enumerate(all_image_paths, start=1):
+            # --- Etapa 2: OCR ---
+            await _set_job_state(
+                redis_client,
+                job_id,
+                status="processing",
+                progress=f"Executando OCR na imagem {img_idx}/{total}...",
+            )
+
             texts = await extract_text(str(img_path))
-            all_texts.extend(texts)
+            if not texts:
+                logger.warning(
+                    "[gc_image_import] Job %s — imagem %d/%d sem texto detectado, pulando",
+                    job_id, img_idx, total,
+                )
+                continue
 
-        if not all_texts:
+            # --- Etapa 3: Parsing com regex ---
+            await _set_job_state(
+                redis_client,
+                job_id,
+                status="processing",
+                progress=f"Estruturando dados da imagem {img_idx}/{total}...",
+            )
+
+            extracted = parse_ocr_text(texts)
+            name = _normalize_text_field(extracted.name)
+            street = _normalize_text_field(extracted.street)
+
+            if not name or not street:
+                logger.warning(
+                    "[gc_image_import] Job %s — imagem %d/%d sem nome/endereço, pulando",
+                    job_id, img_idx, total,
+                )
+                continue
+
+            # --- Etapa 4: Geocoding ---
+            await _set_job_state(
+                redis_client,
+                job_id,
+                status="processing",
+                progress=f"Buscando coordenadas da imagem {img_idx}/{total}...",
+            )
+
+            full_address = (
+                f"{extracted.street}, {extracted.number or 's/n'}, "
+                f"{extracted.neighborhood or ''}, {extracted.city} - "
+                f"{extracted.state}, Brasil"
+            )
+            logger.info("[geocoding] Query: \"%s\"", full_address)
+
+            coords = await fetch_coordinates(full_address)
+            if coords:
+                extracted.latitude = coords[0]
+                extracted.longitude = coords[1]
+                logger.info(
+                    "[geocoding] Resultado: lat=%s, lng=%s",
+                    coords[0],
+                    coords[1],
+                )
+            else:
+                logger.warning("[geocoding] Falha no geocoding — salvando sem coordenadas")
+
+            results.append(extracted.model_dump(mode="json"))
+
+        # --- Etapa 5: Resultado final ---
+        if not results:
             await _set_job_state(
                 redis_client,
                 job_id,
                 status="failed",
-                error="Nenhum texto foi detectado na imagem.",
+                error="Nenhuma imagem produziu dados válidos (nome e endereço).",
             )
             return
 
-        # --- Etapa 3: Parsing com regex ---
-        await _set_job_state(
-            redis_client,
-            job_id,
-            status="processing",
-            progress="Estruturando dados extraídos...",
-        )
-
-        extracted = parse_ocr_text(all_texts)
-        name = _normalize_text_field(extracted.name)
-        street = _normalize_text_field(extracted.street)
-
-        # Valida campos mínimos (nome + logradouro)
-        if not name or not street:
-            await _set_job_state(
-                redis_client,
-                job_id,
-                status="failed",
-                error="Não foi possível extrair nome e endereço da imagem.",
-            )
-            return
-
-        # --- Etapa 4: Geocoding ---
-        await _set_job_state(
-            redis_client,
-            job_id,
-            status="processing",
-            progress="Buscando coordenadas no Google Maps...",
-        )
-
-        full_address = (
-            f"{extracted.street}, {extracted.number or 's/n'}, "
-            f"{extracted.neighborhood or ''}, {extracted.city} - "
-            f"{extracted.state}, Brasil"
-        )
-        logger.info("[geocoding] Query: \"%s\"", full_address)
-
-        coords = await fetch_coordinates(full_address)
-        if coords:
-            extracted.latitude = coords[0]
-            extracted.longitude = coords[1]
-            logger.info(
-                "[geocoding] Resultado: lat=%s, lng=%s",
-                coords[0],
-                coords[1],
-            )
-
-            # Tenta obter CEP via geocoding reverso
-            try:
-                from app.services.geocoding_service import fetch_address_from_cep
-                # CEP será preenchido pelo frontend ou na rota de save
-            except Exception:
-                pass
-        else:
-            logger.warning("[geocoding] Falha no geocoding — salvando sem coordenadas")
-
-        # --- Etapa 5: Concluído ---
         await _set_job_state(
             redis_client,
             job_id,
             status="done",
-            result=extracted.model_dump(mode="json"),
+            result=results,
         )
-        logger.info("[gc_image_import] Job %s concluído: status=done", job_id)
+        logger.info(
+            "[gc_image_import] Job %s concluído: status=done (%d GC(s))",
+            job_id, len(results),
+        )
 
     except Exception as exc:
         logger.error("[gc_image_import] Job %s falhou: %s", job_id, exc)

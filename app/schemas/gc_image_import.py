@@ -67,7 +67,7 @@ class GcJobStatusEvent(BaseModel):
 
     status: str
     progress: str | None = None
-    result: GcExtractedData | None = None
+    result: list[GcExtractedData] | None = None
     error: str | None = None
 
 
