@@ -186,7 +186,7 @@ async def process_image_job(
                 redis_client,
                 job_id,
                 status="processing",
-                progress=f"Executando OCR na imagem {img_idx}/{total}...",
+                progress=f"Executando OCR na imagem {img_path} ({img_idx}/{total})...",
             )
 
             texts = await extract_text(str(img_path))
@@ -202,7 +202,7 @@ async def process_image_job(
                 redis_client,
                 job_id,
                 status="processing",
-                progress=f"Estruturando dados da imagem {img_idx}/{total}...",
+                progress=f"Estruturando dados da imagem {img_path} ({img_idx}/{total})...",
             )
 
             extracted = parse_ocr_text(texts)
@@ -228,7 +228,7 @@ async def process_image_job(
                     redis_client,
                     job_id,
                     status="processing",
-                    progress=f"Buscando CEP da imagem {img_idx}/{total}...",
+                    progress=f"Buscando CEP da imagem {img_path} ({img_idx}/{total})...",
                 )
 
                 zip_code = await fetch_zip_code(full_address)
@@ -243,7 +243,7 @@ async def process_image_job(
                 redis_client,
                 job_id,
                 status="processing",
-                progress=f"Buscando coordenadas da imagem {img_idx}/{total}...",
+                progress=f"Buscando coordenadas da imagem {img_path} ({img_idx}/{total})...",
             )
 
             logger.info("[geocoding] Query: \"%s\"", full_address)
