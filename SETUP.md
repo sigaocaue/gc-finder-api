@@ -116,11 +116,11 @@ Para trabalhar no código com autocomplete e debug na IDE:
 > Use Python 3.12 ou 3.13 (build padrão). Python free-threaded (`3.14t`) não é suportado neste projeto.
 
 ```bash
-# Instalar dependências (inclui grupo dev + EasyOCR)
-poetry install --with ocr-easyocr
+# Instalar dependências (inclui grupo dev + Tesseract)
+poetry install --with ocr-tesseract
 
 # Instalar com múltiplos serviços OCR
-poetry install --with ocr-easyocr,ocr-tesseract,ocr-documentai
+poetry install --with ocr-tesseract,ocr-documentai
 
 # Rodar comandos no ambiente virtual do Poetry
 poetry run pytest -v
@@ -192,25 +192,21 @@ docker-compose up -d
 ### Escolher quais serviços OCR instalar no Docker
 
 Os serviços OCR são instalados como grupos independentes via build arg `OCR_GROUPS`.
-Isso evita instalar dependências pesadas (ex: PyTorch do EasyOCR ~2GB) quando não são necessárias.
+Isso evita instalar dependências pesadas quando não são necessárias.
 
 | Grupo | Pacote principal | Tamanho aproximado |
 |---|---|---|
-| `ocr-easyocr` | EasyOCR + PyTorch | ~2 GB |
 | `ocr-tesseract` | pytesseract + Pillow | ~50 MB |
 | `ocr-documentai` | google-cloud-documentai | ~100 MB |
 
 Configure a variável `OCR_GROUPS` no `.env` antes do build:
 
 ```bash
-# Apenas EasyOCR (padrão)
-OCR_GROUPS=ocr-easyocr
-
-# Apenas Tesseract (build mais leve)
+# Apenas Tesseract (padrão)
 OCR_GROUPS=ocr-tesseract
 
 # Múltiplos serviços
-OCR_GROUPS=ocr-easyocr,ocr-tesseract,ocr-documentai
+OCR_GROUPS=ocr-tesseract,ocr-documentai
 ```
 
 Depois reconstrua:
@@ -220,7 +216,7 @@ docker-compose build api
 docker-compose up -d
 ```
 
-> **Importante:** a variável `OCR_AVAILABLE_SERVICES` no `.env` deve corresponder aos grupos instalados. Exemplo: se `OCR_GROUPS=ocr-easyocr,ocr-tesseract`, então `OCR_AVAILABLE_SERVICES=easyocr,tesseract`.
+> **Importante:** a variável `OCR_AVAILABLE_SERVICES` no `.env` deve corresponder aos grupos instalados. Exemplo: se `OCR_GROUPS=ocr-tesseract,ocr-documentai`, então `OCR_AVAILABLE_SERVICES=tesseract,google_documentai`.
 
 ### Reinstalar dependências dentro do contêiner
 
@@ -228,5 +224,5 @@ Quando for preciso reinstalar todas as dependências (por exemplo, ao limpar cac
 
 ```bash
 docker-compose up -d api
-docker-compose exec api poetry install --with dev,ocr-easyocr
+docker-compose exec api poetry install --with dev,ocr-tesseract
 ```

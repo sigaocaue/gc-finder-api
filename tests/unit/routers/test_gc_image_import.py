@@ -26,7 +26,7 @@ class DummyUpload:
         return self._content
 
 
-def make_form(images=None, images_urls=None, ocr_service="easyocr"):
+def make_form(images=None, images_urls=None, ocr_service="tesseract"):
     return SimpleNamespace(
         images=images,
         images_urls=images_urls,
@@ -47,7 +47,7 @@ async def test_start_image_import_requires_input(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_start_image_import_validates_ocr(monkeypatch):
-    form = make_form(images=None, images_urls=["http://example.com/image.jpg"], ocr_service="easyocr")
+    form = make_form(images=None, images_urls=["http://example.com/image.jpg"], ocr_service="tesseract")
     user = SimpleNamespace(id="u", email="e")
     monkeypatch.setattr(
         "app.routers.gc_image_import.validate_ocr_service",
@@ -63,7 +63,7 @@ async def test_start_image_import_validates_ocr(monkeypatch):
 @pytest.mark.asyncio
 async def test_start_image_import_file_success(monkeypatch, tmp_path):
     upload = DummyUpload("photo.jpg", b"123")
-    form = make_form(images=[upload], images_urls=None, ocr_service="easyocr")
+    form = make_form(images=[upload], images_urls=None, ocr_service="tesseract")
     user = SimpleNamespace(id="u", email="e")
 
     start_job = AsyncMock(return_value="job-123")
@@ -87,7 +87,7 @@ async def test_start_image_import_file_success(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_start_image_import_invalid_extension(monkeypatch, tmp_path):
     upload = DummyUpload("photo.txt", b"123")
-    form = make_form(images=[upload], images_urls=None, ocr_service="easyocr")
+    form = make_form(images=[upload], images_urls=None, ocr_service="tesseract")
     user = SimpleNamespace(id="u", email="e")
     monkeypatch.setattr("app.routers.gc_image_import.tempfile.gettempdir", lambda: str(tmp_path))
     monkeypatch.setattr("app.routers.gc_image_import.validate_ocr_service", lambda value: value)
@@ -100,7 +100,7 @@ async def test_start_image_import_invalid_extension(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_start_image_import_invalid_url(monkeypatch):
-    form = make_form(images=None, images_urls=["ftp://invalid"], ocr_service="easyocr")
+    form = make_form(images=None, images_urls=["ftp://invalid"], ocr_service="tesseract")
     user = SimpleNamespace(id="u", email="e")
     monkeypatch.setattr("app.routers.gc_image_import.validate_ocr_service", lambda value: value)
 
@@ -112,7 +112,7 @@ async def test_start_image_import_invalid_url(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_start_image_import_url_job(monkeypatch, tmp_path):
-    form = make_form(images=None, images_urls=['["http://a","https://b"]'], ocr_service="easyocr")
+    form = make_form(images=None, images_urls=['["http://a","https://b"]'], ocr_service="tesseract")
     user = SimpleNamespace(id="u", email="e")
     monkeypatch.setattr("app.routers.gc_image_import.validate_ocr_service", lambda value: value)
 

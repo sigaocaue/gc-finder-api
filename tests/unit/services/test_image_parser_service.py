@@ -663,16 +663,6 @@ class TestParseOcrText:
     @pytest.mark.parametrize("lines,overrides", [
         pytest.param(
             [
-                "gc", "Jardim Perola", "Itupeva", "Sexta-Feira | 2OH",
-                "Heber 1191281-1249", "Thalia 1197450-7572",
-                "Rua Maria Betelli Deboni;", "172", "Jd Perola",
-                "Itupeva", "La Go1nhA Jund1 4",
-            ],
-            {},
-            id="easyocr",
-        ),
-        pytest.param(
-            [
                 "Ss", "Jardim Perola", "Itupeva", "Sexta-Feira | 20H",
                 "Heber 1191281-1249", "Thalia 1197450-7572",
                 "Rua Maria Betelli Deboni,",
@@ -700,15 +690,6 @@ class TestParseOcrText:
         self._assert_gc_result(result, expected)
 
     @pytest.mark.parametrize("lines", [
-        pytest.param(
-            [
-                "gc", "Vila Ana 2", "Sexta-Feira", "2OH",
-                "Rog\u00e9rio 1196454-2597", "Thais 1199538-9502",
-                "Av Caetano Gornati 1101", "Casa 207",
-                "condominio Vintage", "LA G01nA A Jund|A [",
-            ],
-            id="easyocr",
-        ),
         pytest.param(
             [
                 "5:", "Vila Ana 2", "Sexta-Feira |20H",

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     google_maps_api_key: str = ""
 
     # OCR — serviços disponíveis no ambiente (separados por vírgula)
-    ocr_available_services: str = "easyocr"
+    ocr_available_services: str = "tesseract"
 
     # Google Document AI (necessário apenas se google_documentai estiver em ocr_available_services)
     google_documentai_project_id: str = ""

@@ -23,13 +23,6 @@ httpx = ">=0.27.0"
 redis = ">=5.0.0"
 python-multipart = ">=0.0.9"
 
-[tool.poetry.group.ocr-easyocr]
-optional = true
-
-[tool.poetry.group.ocr-easyocr.dependencies]
-easyocr = ">=1.7.0"
-Pillow = ">=10.0.0"
-
 [tool.poetry.group.ocr-tesseract]
 optional = true
 

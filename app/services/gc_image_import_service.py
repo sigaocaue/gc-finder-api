@@ -120,7 +120,7 @@ async def process_image_job(
     job_id: str,
     image_paths: list[Path],
     image_urls: list[str],
-    ocr_service_name: str = "easyocr",
+    ocr_service_name: str = "tesseract",
 ) -> None:
     """Processa o job de extração em background."""
     redis_client = _get_redis()

@@ -31,11 +31,10 @@ O GC Finder API é o backend responsável por:
 
 ## Serviços OCR
 
-A importação de GCs por imagem suporta 3 serviços OCR, instaláveis de forma independente:
+A importação de GCs por imagem suporta 2 serviços OCR, instaláveis de forma independente:
 
 | Serviço | Grupo Poetry | Descrição |
 |---|---|---|
-| EasyOCR | `ocr-easyocr` | OCR baseado em deep learning (PyTorch). Boa precisão, imagem Docker maior (~2 GB) |
 | Tesseract | `ocr-tesseract` | OCR tradicional, leve e rápido. Requer binário `tesseract-ocr` no sistema |
 | Google Document AI | `ocr-documentai` | Serviço gerenciado do Google Cloud. Requer projeto e processador configurados |
 

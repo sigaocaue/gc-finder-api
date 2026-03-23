@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 class OcrServiceName(StrEnum):
     """Serviços OCR disponíveis para extração de texto de imagens."""
 
-    EASYOCR = "easyocr"
     TESSERACT = "tesseract"
     GOOGLE_DOCUMENTAI = "google_documentai"
 
@@ -35,7 +34,7 @@ class ImageImportForm:
             None, description="URLs de imagens para extração"
         ),
         ocr_service: OcrServiceName = Form(
-            OcrServiceName.EASYOCR,
+            OcrServiceName.TESSERACT,
             description="Serviço OCR a ser utilizado na extração",
         ),
     ) -> None:

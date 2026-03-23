@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 # Mapeamento canônico: chave normalizada → nome de exibição
 VALID_OCR_SERVICES = {
-    "easyocr": "EasyOCR",
     "tesseract": "Tesseract",
     "google_documentai": "Google Document AI",
 }
@@ -60,10 +59,6 @@ def get_ocr_service(ocr_service: str) -> OcrService:
     O nome já deve ter sido validado com validate_ocr_service().
     """
     normalized = _normalize_name(ocr_service)
-
-    if normalized == "easyocr":
-        from app.services.ocr.easyocr_service import EasyOcrService
-        return EasyOcrService()
 
     if normalized == "tesseract":
         from app.services.ocr.tesseract_service import TesseractOcrService

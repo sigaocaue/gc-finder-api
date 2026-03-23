@@ -17,7 +17,7 @@ class TestNormalizeName:
     """Testa a normalização de nomes de serviços OCR."""
 
     def test_lowercase(self):
-        assert _normalize_name("EasyOCR") == "easyocr"
+        assert _normalize_name("Tesseract") == "tesseract"
 
     def test_strips_whitespace(self):
         assert _normalize_name("  tesseract  ") == "tesseract"
@@ -33,23 +33,23 @@ class TestGetAvailableServices:
     """Testa a leitura dos serviços disponíveis no ambiente."""
 
     @patch("app.services.ocr.factory.settings")
-    def test_default_only_easyocr(self, mock_settings):
-        mock_settings.ocr_available_services = "easyocr"
+    def test_default_only_tesseract(self, mock_settings):
+        mock_settings.ocr_available_services = "tesseract"
         result = get_available_services()
-        assert result == {"easyocr"}
+        assert result == {"tesseract"}
 
     @patch("app.services.ocr.factory.settings")
     def test_multiple_services(self, mock_settings):
-        mock_settings.ocr_available_services = "easyocr,tesseract,google_documentai"
+        mock_settings.ocr_available_services = "tesseract,google_documentai"
         result = get_available_services()
-        assert result == {"easyocr", "tesseract", "google_documentai"}
+        assert result == {"tesseract", "google_documentai"}
 
     @patch("app.services.ocr.factory.settings")
     def test_case_insensitive(self, mock_settings):
-        mock_settings.ocr_available_services = "EasyOCR, Tesseract"
+        mock_settings.ocr_available_services = "Tesseract, Google_DocumentAI"
         result = get_available_services()
-        assert "easyocr" in result
         assert "tesseract" in result
+        assert "google_documentai" in result
 
 
 class TestValidateOcrService:
@@ -57,21 +57,21 @@ class TestValidateOcrService:
 
     @patch("app.services.ocr.factory.settings")
     def test_valid_and_available(self, mock_settings):
-        mock_settings.ocr_available_services = "easyocr"
-        result = validate_ocr_service("EasyOCR")
-        assert result == "easyocr"
+        mock_settings.ocr_available_services = "tesseract"
+        result = validate_ocr_service("Tesseract")
+        assert result == "tesseract"
 
     @patch("app.services.ocr.factory.settings")
     def test_invalid_service_raises(self, mock_settings):
-        mock_settings.ocr_available_services = "easyocr"
+        mock_settings.ocr_available_services = "tesseract"
         with pytest.raises(ValueError, match="não é válido"):
             validate_ocr_service("openai_vision")
 
     @patch("app.services.ocr.factory.settings")
     def test_valid_but_unavailable_raises(self, mock_settings):
-        mock_settings.ocr_available_services = "easyocr"
+        mock_settings.ocr_available_services = "tesseract"
         with pytest.raises(ValueError, match="não está disponível"):
-            validate_ocr_service("tesseract")
+            validate_ocr_service("google_documentai")
 
     @patch("app.services.ocr.factory.settings")
     def test_case_insensitive_input(self, mock_settings):
@@ -88,11 +88,6 @@ class TestValidateOcrService:
 
 class TestGetOcrService:
     """Testa a criação de instâncias de serviços OCR."""
-
-    def test_returns_easyocr_instance(self):
-        from app.services.ocr.easyocr_service import EasyOcrService
-        ocr = get_ocr_service("easyocr")
-        assert isinstance(ocr, EasyOcrService)
 
     def test_returns_tesseract_instance(self):
         from app.services.ocr.tesseract_service import TesseractOcrService
