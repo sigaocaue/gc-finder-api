@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # Banco de dados
     database_url: str = "postgresql+asyncpg://gcfinder:gcfinder@db:5432/gcfinder"
+    database_use_ssl: bool = False
 
     # Redis
     redis_url: str = "redis://redis:6379/0"
@@ -21,6 +22,16 @@ class Settings(BaseSettings):
 
     # Google Maps
     google_maps_api_key: str = ""
+
+    # OCR — serviços disponíveis no ambiente (separados por vírgula)
+    ocr_available_services: str = "easyocr"
+
+    # Google Document AI (necessário apenas se google_documentai estiver em ocr_available_services)
+    google_documentai_project_id: str = ""
+    google_documentai_location: str = "us"
+    google_documentai_processor_id: str = ""
+    # JSON da service account do Google Cloud (conteúdo completo do arquivo .json)
+    google_cloud_credentials_json: str = ""
 
     # Google Forms
     google_forms_submit_url: str = ""

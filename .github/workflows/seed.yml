@@ -1,0 +1,46 @@
+name: Run Seeds
+
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi --without dev
+
+      - name: Normalize async database URL
+        run: |
+          DB_URL="${{ secrets.DATABASE_URL }}"
+          if [[ "$DB_URL" == postgresql://* ]]; then
+            DB_URL="postgresql+asyncpg://${DB_URL#postgresql://}"
+          fi
+          DB_URL="${DB_URL//sslmode=/ssl=}"
+          DB_URL="${DB_URL//&channel_binding=require/}"
+          DB_URL="${DB_URL//\?channel_binding=require/}"
+          DB_URL="${DB_URL//&&/&}"
+          DB_URL="${DB_URL/%\?}"
+          DB_URL="${DB_URL/%&}"
+          echo "DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+
+      - name: Run seeds
+        run: poetry run python -m seeds.run_seeds
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_USE_SSL: "true"
+          APP_ENV: production
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}

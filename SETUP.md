@@ -116,8 +116,11 @@ Para trabalhar no código com autocomplete e debug na IDE:
 > Use Python 3.12 ou 3.13 (build padrão). Python free-threaded (`3.14t`) não é suportado neste projeto.
 
 ```bash
-# Instalar dependências (inclui grupo dev)
-poetry install
+# Instalar dependências (inclui grupo dev + EasyOCR)
+poetry install --with ocr-easyocr
+
+# Instalar com múltiplos serviços OCR
+poetry install --with ocr-easyocr,ocr-tesseract,ocr-documentai
 
 # Rodar comandos no ambiente virtual do Poetry
 poetry run pytest -v
@@ -184,4 +187,46 @@ Após alterar dependências no `pyproject.toml`:
 poetry lock
 docker-compose build --no-cache api
 docker-compose up -d
+```
+
+### Escolher quais serviços OCR instalar no Docker
+
+Os serviços OCR são instalados como grupos independentes via build arg `OCR_GROUPS`.
+Isso evita instalar dependências pesadas (ex: PyTorch do EasyOCR ~2GB) quando não são necessárias.
+
+| Grupo | Pacote principal | Tamanho aproximado |
+|---|---|---|
+| `ocr-easyocr` | EasyOCR + PyTorch | ~2 GB |
+| `ocr-tesseract` | pytesseract + Pillow | ~50 MB |
+| `ocr-documentai` | google-cloud-documentai | ~100 MB |
+
+Configure a variável `OCR_GROUPS` no `.env` antes do build:
+
+```bash
+# Apenas EasyOCR (padrão)
+OCR_GROUPS=ocr-easyocr
+
+# Apenas Tesseract (build mais leve)
+OCR_GROUPS=ocr-tesseract
+
+# Múltiplos serviços
+OCR_GROUPS=ocr-easyocr,ocr-tesseract,ocr-documentai
+```
+
+Depois reconstrua:
+
+```bash
+docker-compose build api
+docker-compose up -d
+```
+
+> **Importante:** a variável `OCR_AVAILABLE_SERVICES` no `.env` deve corresponder aos grupos instalados. Exemplo: se `OCR_GROUPS=ocr-easyocr,ocr-tesseract`, então `OCR_AVAILABLE_SERVICES=easyocr,tesseract`.
+
+### Reinstalar dependências dentro do contêiner
+
+Quando for preciso reinstalar todas as dependências (por exemplo, ao limpar caches ou ao mover o projeto para outro ambiente), use este comando dentro do contêiner da API:
+
+```bash
+docker-compose up -d api
+docker-compose exec api poetry install --with dev,ocr-easyocr
 ```

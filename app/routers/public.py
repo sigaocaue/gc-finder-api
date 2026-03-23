@@ -3,27 +3,17 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr
 
 from app.dependencies import DbSession
 from app.schemas.common import ApiResponse
 from app.schemas.gc import GcMapItem, GcNearbyItem
+from app.schemas.public import InterestRequest
 from app.services.gc_service import GcService
 from app.services.google_forms_service import submit_interest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/public", tags=["público"])
-
-
-class InterestRequest(BaseModel):
-    """Dados para registro de interesse em um GC."""
-
-    name: str
-    email: EmailStr
-    phone: str
-    zip_code: str
-    message: str | None = None
 
 
 @router.get("/gcs/map", response_model=ApiResponse[list[GcMapItem]])

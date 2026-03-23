@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Persistência local (volumes Docker)
+.persistence
+
+# Ambientes virtuais
+.venv
+__pycache__
+*.pyc
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Variáveis de ambiente locais
+.env
+
+# Testes e cobertura
+.pytest_cache
+htmlcov
+.coverage
+
+# Documentação e configs não necessárias no build
+*.md
+LICENSE
+.github

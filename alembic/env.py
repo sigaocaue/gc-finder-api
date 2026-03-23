@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
-from app.database import Base
+from app.database import Base, _normalize_database_url, _connect_args
 
 # Importa todos os models para que o Alembic detecte as tabelas
 from app.models import *  # noqa: F401, F403
@@ -16,8 +16,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Sobrescreve a URL do banco com a do settings
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Sobrescreve a URL do banco com a versão normalizada (driver asyncpg, sem params incompatíveis)
+config.set_main_option("sqlalchemy.url", _normalize_database_url(settings.database_url))
 
 target_metadata = Base.metadata
 
@@ -49,6 +49,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=_connect_args,
     )
 
     async with connectable.connect() as connection:

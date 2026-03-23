@@ -1,6 +1,10 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        APP_ENV: ${APP_ENV:-development}
+        OCR_GROUPS: ${OCR_GROUPS:-ocr-easyocr}
     container_name: gc_finder_api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:

@@ -86,6 +86,51 @@ async def fetch_coordinates(address: str) -> tuple[float, float] | None:
             return None
 
 
+async def fetch_zip_code(address: str) -> str | None:
+    """Consulta a API do Google Maps Geocoding para obter o CEP do endereço.
+
+    Retorna o CEP (apenas dígitos) ou None em caso de falha.
+    """
+    if not settings.google_maps_api_key:
+        logger.warning("Google Maps API key não configurada; CEP não será obtido")
+        return None
+
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "address": address,
+        "key": settings.google_maps_api_key,
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("status") != "OK" or not data.get("results"):
+                logger.warning(
+                    "Geocodificação sem resultados para CEP de '%s': status=%s",
+                    address,
+                    data.get("status"),
+                )
+                return None
+
+            # Percorre os componentes do endereço buscando o postal_code
+            for component in data["results"][0].get("address_components", []):
+                if "postal_code" in component.get("types", []):
+                    raw_cep = component["long_name"]
+                    # Remove caracteres não numéricos (ex: "13201-000" → "13201000")
+                    digits = "".join(c for c in raw_cep if c.isdigit())
+                    logger.info("[geocoding] CEP encontrado: %s", digits)
+                    return digits
+
+            logger.warning("[geocoding] Nenhum postal_code retornado para '%s'", address)
+            return None
+        except httpx.HTTPError as exc:
+            logger.error("Erro ao buscar CEP para '%s': %s", address, exc)
+            return None
+
+
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calcula a distância em quilômetros entre dois pontos usando a fórmula de Haversine."""
     R = 6371.0  # Raio da Terra em km
