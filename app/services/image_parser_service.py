@@ -47,6 +47,10 @@ _WEEKDAY_PATTERN = re.compile(
 )
 _TIME_PATTERN = re.compile(r"(\d{1,2})[h:](\d{0,2})")
 _PHONE_PATTERN = re.compile(r"\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4}")
+OCR_CORRECTIONS = {
+    "|": "",
+    ";": "",
+}
 
 
 def _normalize_phone(raw: str) -> str:
@@ -54,11 +58,84 @@ def _normalize_phone(raw: str) -> str:
     return re.sub(r"\D", "", raw)
 
 
-def _normalize_time(hour_str: str, minute_str: str) -> str:
-    """Converte hora e minuto para formato HH:MM."""
-    hour = int(hour_str)
-    minute = int(minute_str) if minute_str else 0
-    return f"{hour:02d}:{minute:02d}"
+def _normalize_time(time_str: str) -> str | None:
+    """Converte horário para formato HH:MM."""
+
+    # Substitui padrões específicos primeiro
+    # "2OH" ou "20H" deve virar "20"
+    time_str = time_str.replace("O", "0")
+    time_str = time_str.replace("OH", "0h")
+
+    # Remove caracteres não numéricos
+    cleaned = re.sub(r"\D", "", time_str)
+
+    if not cleaned:
+        return None
+
+    # Se tem 2 dígitos, pode ser 20 (20h) ou 02 (2h)
+    # Precisamos verificar o contexto
+    if len(cleaned) <= 2:
+        hour = int(cleaned)
+        return f"{hour:02d}:00"
+
+    # Caso "2030" -> "20:30"
+    if len(cleaned) == 4:
+        return f"{cleaned[:2]}:{cleaned[2:]}"
+
+    return None
+
+
+def _extract_weekday_and_time(text: str) -> tuple[int | None, str | None]:
+    """Extrai dia da semana e horário de um texto."""
+    text_lower = text.lower()
+
+    # Encontra dia da semana
+    weekday = None
+    for day_name, day_num in WEEKDAY_MAP.items():
+        if day_name in text_lower:
+            weekday = day_num
+            break
+
+    # Encontra horário
+    time_str = None
+    # Normaliza o texto para substituir O por 0
+    normalized_text = text.replace("O", "0").replace("OH", "0h")
+    # Procura padrões como "20h", "20:00", "20H", "20"
+    time_match = re.search(r"(\d{1,2})[hH:0](\d{0,2})", normalized_text)
+    if time_match:
+        hour = int(time_match.group(1))
+        # Se hour for 2 e o texto original tinha "O" ou "OH", provavelmente é 20
+        if hour == 2 and ("O" in text or "OH" in text):
+            hour = 20
+        minute = int(time_match.group(2)) if time_match.group(2) else 0
+        time_str = f"{hour:02d}:{minute:02d}"
+
+    return weekday, time_str
+
+
+def _extract_leader_name_and_phone(text: str) -> tuple[str | None, str | None]:
+    """Extrai nome e telefone de uma linha."""
+    phone_match = re.search(r"(\d{2,3})[.\s-]?(\d{4,5})[.\s-]?(\d{4})", text)
+    if not phone_match:
+        return None, None
+
+    phone = f"{phone_match.group(1)}{phone_match.group(2)}{phone_match.group(3)}"
+
+    # Nome é o que vem antes do telefone
+    name = text[:phone_match.start()].strip()
+
+    # Remove caracteres especiais do nome
+    name = re.sub(r"[;:,|]", "", name).strip()
+
+    return name if name else None, phone
+
+
+def _correct_ocr_text(text: str) -> str:
+    """Aplica correções conhecidas de OCR."""
+    result = text
+    for error, correction in OCR_CORRECTIONS.items():
+        result = result.replace(error, correction)
+    return result.strip()
 
 
 def _is_noise_line(line: str) -> bool:
@@ -76,168 +153,155 @@ def _is_noise_line(line: str) -> bool:
 
 
 def parse_ocr_text(lines: list[str]) -> GcExtractedData:
-    """Analisa o texto extraído pelo OCR e retorna dados estruturados do GC."""
-    full_text = "\n".join(lines)
+    """
+    Analisa o texto extraído pelo OCR baseado na posição dos elementos.
+    O layout é consistente:
+        0: 'gc' (marcador)
+        1: Nome do GC (parte 1)
+        2: Nome do GC (parte 2, opcional) ou dia/horário
+        3: Dia/horário (se parte 2 existe)
+        4+: Líderes (nome + telefone)
+        ...: Endereço (múltiplas linhas)
+        -1: Rodapé (Lagoinha Jundiaí)
+    """
 
-    # --- Nome do GC ---
-    name = None
-    for line in lines:
-        stripped = line.strip()
-        if len(stripped) > 4 and not _is_noise_line(stripped):
-            # Ignora linhas que são claramente endereço
-            if _ADDRESS_PATTERN.match(stripped):
-                continue
-            name = stripped
-            break
+    if not lines or lines[0].lower() != 'gc':
+        logger.warning("[image_parser] Formato inválido: primeiro elemento não é 'gc'")
+        return GcExtractedData(
+            name="",
+            street="",
+            leaders=[],
+            meetings=[],
+        )
 
-    if not name:
-        name = lines[0].strip() if lines else ""
-        logger.warning("[image_parser] Campo não encontrado: name — usando primeira linha")
+    # Remove elementos vazios e aplica correções
+    corrected_lines = [_correct_ocr_text(line) for line in lines if line.strip()]
 
-    # --- Logradouro e número ---
-    street = None
-    number = None
-    address_match = _ADDRESS_PATTERN.search(full_text)
-    if address_match:
-        # Pega o trecho completo do endereço até vírgula ou fim de linha
-        start = address_match.start()
-        # Busca até o fim da linha ou próximo delimitador
-        end_match = re.search(r"[,\n]", full_text[address_match.end():])
-        if end_match:
-            street_end = address_match.end() + end_match.start()
-        else:
-            street_end = address_match.end()
-        street = full_text[start:street_end].strip()
+    idx = 1
+    total = len(corrected_lines)
 
-        # Busca número após o endereço
-        remaining = full_text[street_end:]
-        num_match = _NUMBER_PATTERN.search(remaining[:30])
-        if num_match:
-            number = num_match.group(1)
-        else:
-            # Tenta buscar número na mesma linha
-            full_address_line = full_text[start:street_end + 30]
-            num_match = _NUMBER_PATTERN.search(full_address_line)
-            if num_match:
-                number = num_match.group(1)
+    # ========== 1. Nome do GC ==========
+    name_parts = []
 
-    if not street:
-        logger.warning("[image_parser] Campo não encontrado: street — campo obrigatório")
-        street = ""
+    if idx < total:
+        name_parts.append(corrected_lines[idx])
+        idx += 1
 
-    if not number:
-        logger.warning("[image_parser] Campo não encontrado: number")
+    # Verifica se o próximo elemento parece parte do nome (não contém dia/horário)
+    if idx < total:
+        next_line = corrected_lines[idx].lower()
+        has_weekday = any(day in next_line for day in WEEKDAY_MAP.keys())
+        # Normaliza horário para detectar padrões como "20h" ou "2OH"
+        normalized = next_line.replace("O", "0")
+        has_hour = 'h' in normalized and any(c.isdigit() for c in normalized)
 
-    # --- Complemento ---
-    complement = None
-    for line in lines:
-        if _COMPLEMENT_KEYWORDS.search(line):
-            complement = line.strip()
-            break
+        if not has_weekday and not has_hour:
+            name_parts.append(corrected_lines[idx])
+            idx += 1
 
-    # --- Bairro ---
-    neighborhood = None
-    neighborhood_match = _NEIGHBORHOOD_PATTERN.search(full_text)
-    if neighborhood_match:
-        neighborhood = neighborhood_match.group(0).strip()
-    else:
-        logger.warning("[image_parser] Campo não encontrado: neighborhood — usando valor padrão")
+    name = " ".join(name_parts)
 
-    # --- Cidade e Estado (padrões: Jundiaí, SP) ---
-    city = "Jundiaí"
-    state = "SP"
+    # ========== 2. Dia e Horário ==========
+    meetings = []
 
-    # Tenta detectar cidade/estado no texto
-    city_state_match = re.search(
-        r"(\w[\w\s]+?)\s*[-–/]\s*(SP|RJ|MG|PR|SC|RS|BA|CE|PE|GO|DF|ES|MA|PA|PB|PI|RN|SE|AL|AM|AP|AC|MT|MS|RO|RR|TO)\b",
-        full_text,
-        re.IGNORECASE,
-    )
-    if city_state_match:
-        city = city_state_match.group(1).strip()
-        state = city_state_match.group(2).upper()
+    if idx < total:
+        line = corrected_lines[idx]
+        weekday, time_str = _extract_weekday_and_time(line)
 
-    # --- Dia da semana e horário (encontros) ---
-    meetings: list[MeetingExtracted] = []
-    weekday_matches = _WEEKDAY_PATTERN.finditer(full_text)
-    for wm in weekday_matches:
-        day_name = wm.group(1).lower()
-        weekday = WEEKDAY_MAP.get(day_name)
-        if weekday is None:
-            continue
+        # Se não encontrou na primeira tentativa, tenta a próxima linha
+        if weekday is None and time_str is None:
+            idx += 1
+            if idx < total:
+                weekday, time_str = _extract_weekday_and_time(corrected_lines[idx])
 
-        # Procura horário próximo ao dia da semana
-        nearby_text = full_text[wm.start():wm.start() + 80]
-        time_match = _TIME_PATTERN.search(nearby_text)
-        if time_match:
-            start_time = _normalize_time(time_match.group(1), time_match.group(2))
-            meetings.append(
-                MeetingExtracted(weekday=weekday, start_time=start_time)
-            )
-        else:
-            logger.warning(
-                "[image_parser] Dia '%s' encontrado sem horário associado", day_name
-            )
+        if weekday is not None and time_str is not None:
+            meetings.append(MeetingExtracted(weekday=weekday, start_time=time_str))
+        elif time_str:
+            # Só tem horário, assume sexta como padrão
+            meetings.append(MeetingExtracted(weekday=5, start_time=time_str))
+            logger.warning("[image_parser] Horário encontrado sem dia da semana")
 
-    if not meetings:
-        logger.warning("[image_parser] Campo não encontrado: meetings")
+        idx += 1
 
-    # --- Telefones (contatos dos líderes) ---
-    phones = _PHONE_PATTERN.findall(full_text)
-    normalized_phones = [_normalize_phone(p) for p in phones]
+    # ========== 3. Líderes ==========
+    leaders = []
 
-    # --- Monta líderes ---
-    # Heurística: se existem telefones mas sem nomes de líderes identificáveis,
-    # cria líderes genéricos; caso contrário tenta extrair nomes
-    leaders: list[LeaderExtracted] = []
+    while idx < total - 1:  # -1 para ignorar o rodapé
+        line = corrected_lines[idx]
+        name_leader, phone = _extract_leader_name_and_phone(line)
 
-    # Tenta encontrar nomes de líderes: linhas curtas (nomes) próximas a telefones
-    leader_names: list[str] = []
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        # Nome de líder: linha curta (2-40 chars), sem números longos, sem endereço
-        if (
-            2 < len(stripped) < 40
-            and not _PHONE_PATTERN.search(stripped)
-            and not _ADDRESS_PATTERN.search(stripped)
-            and not _WEEKDAY_PATTERN.search(stripped)
-            and not _TIME_PATTERN.search(stripped)
-            and not _COMPLEMENT_KEYWORDS.search(stripped)
-            and not _NEIGHBORHOOD_PATTERN.match(stripped)
-            and stripped != name
-            and not re.search(r"\d{3,}", stripped)
-        ):
-            # Verifica se a próxima ou anterior linha tem telefone
-            context_start = max(0, i - 1)
-            context_end = min(len(lines), i + 3)
-            context_lines = lines[context_start:context_end]
-            context_text = " ".join(context_lines)
-            if _PHONE_PATTERN.search(context_text):
-                leader_names.append(stripped)
-
-    if leader_names:
-        # Distribui telefones entre líderes
-        phones_per_leader = max(1, len(normalized_phones) // len(leader_names))
-        for idx, leader_name in enumerate(leader_names):
-            start_idx = idx * phones_per_leader
-            end_idx = start_idx + phones_per_leader if idx < len(leader_names) - 1 else len(normalized_phones)
-            contacts = [
-                LeaderContactExtracted(type="whatsapp", value=p)
-                for p in normalized_phones[start_idx:end_idx]
-            ]
-            leaders.append(LeaderExtracted(name=leader_name, contacts=contacts))
-    elif normalized_phones:
-        # Sem nomes identificáveis: cada telefone vira um líder sem nome definido
-        for phone in normalized_phones:
+        if phone:
+            # É uma linha de líder
+            leader_name = name_leader if name_leader else "Líder"
             leaders.append(
                 LeaderExtracted(
-                    name="Líder",
+                    name=leader_name,
                     contacts=[LeaderContactExtracted(type="whatsapp", value=phone)],
                 )
             )
+            idx += 1
+        else:
+            # Pode ser parte do endereço
+            break
 
-    if not leaders:
-        logger.warning("[image_parser] Campo não encontrado: leaders")
+    # ========== 4. Endereço ==========
+    address_parts = []
+    while idx < total - 1:  # -1 para ignorar o rodapé
+        address_parts.append(corrected_lines[idx])
+        idx += 1
+
+    # Processa o endereço
+    street = ""
+    number = None
+    complement = None
+    neighborhood = None
+
+    if address_parts:
+        # Tenta identificar logradouro (começa com Rua, Avenida, etc)
+        for i, part in enumerate(address_parts):
+            part_lower = part.lower()
+            if any(part_lower.startswith(prefix) for prefix in
+                   ["rua", "avenida", "av", "alameda", "travessa", "estrada", "rodovia"]):
+                street = part
+                # Próximo pode ser número
+                if i + 1 < len(address_parts):
+                    next_part = address_parts[i + 1]
+                    if next_part.isdigit():
+                        number = next_part
+                        # O resto pode ser complemento e bairro
+                        if i + 2 < len(address_parts):
+                            remaining = address_parts[i + 2:]
+                            # Tenta identificar complemento
+                            for rem in remaining:
+                                rem_lower = rem.lower()
+                                if any(keyword in rem_lower for keyword in ["casa", "apto", "bloco", "cond", "torre"]):
+                                    complement = rem
+                                    break
+                            # O último antes do rodapé geralmente é o bairro
+                            if not neighborhood and remaining:
+                                neighborhood = remaining[-1] if remaining else None
+                break
+
+        # Se não encontrou logradouro específico, junta tudo
+        if not street and address_parts:
+            # Tenta encontrar número no meio do endereço
+            full_address = " ".join(address_parts)
+            # Busca padrão de rua + número
+            addr_match = re.search(r"(Rua|Avenida|Av)\s+([^,\d]+)[,\s]*(\d+)", full_address, re.IGNORECASE)
+            if addr_match:
+                street = f"{addr_match.group(1)} {addr_match.group(2)}".strip()
+                number = addr_match.group(3)
+            else:
+                street = full_address
+
+    # ========== 5. Cidade ==========
+    city = "Jundiaí"
+    state = "SP"
+
+    # Verifica se tem cidade diferente no texto
+    full_text = " ".join(corrected_lines)
+    if "itupeva" in full_text.lower():
+        city = "Itupeva"
 
     logger.info(
         "[image_parser] Extraído — name=%s, street=%s, leaders=%d, meetings=%d",
@@ -257,4 +321,17 @@ def parse_ocr_text(lines: list[str]) -> GcExtractedData:
         state=state,
         leaders=leaders,
         meetings=meetings,
+        description=None,
+        zip_code=None,
+        latitude=None,
+        longitude=None,
     )
+
+
+if __name__ == "__main__":
+    import json
+    ocr1 = ['gc', 'Casais', 'Jardim Samambaias', 'Sexta-Feira | 2OH', 'Vanessa 1198331-2401', 'Cadu 1198331-2572',
+            'Rua Carmela Nano', '432', 'Jardim das Samambalas', 'LA G01nA A Jund|A']
+    resultado1 = parse_ocr_text(ocr1)
+    resultado1 = json.dumps(resultado1.model_dump(), indent=2)
+    print(resultado1)
