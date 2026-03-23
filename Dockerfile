@@ -19,6 +19,11 @@ ARG APP_ENV=development
 
 RUN echo -e "The environment is set to: $APP_ENV\nThe ocr_groups is set to: $OCR_GROUPS"
 
+# Instala PyTorch CPU-only antes do EasyOCR para evitar os pacotes CUDA (~5GB desnecessários)
+RUN if echo "$OCR_GROUPS" | grep -q "ocr-easyocr"; then \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
+    fi
+
 RUN APP_ENV_LOWER=$(echo "$APP_ENV" | tr '[:upper:]' '[:lower:]') && \
     if [ "$APP_ENV_LOWER" = "production" ]; then \
         BASE_CMD="poetry install --no-interaction --no-ansi --without dev --no-root"; \
