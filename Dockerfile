@@ -3,10 +3,12 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Instala dependências do sistema e o Poetry
+ARG OCR_GROUPS=ocr-easyocr
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    tesseract-ocr \
-    tesseract-ocr-por \
+    && if echo "$OCR_GROUPS" | grep -q "ocr-tesseract"; then \
+        apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por; \
+    fi \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir poetry \
     && poetry config virtualenvs.create false
@@ -14,8 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copia apenas os arquivos de dependências primeiro (cache de layer)
 COPY pyproject.toml poetry.lock ./
 ARG APP_ENV=development
-# Grupos OCR a instalar (ex: "ocr-easyocr", "ocr-easyocr,ocr-tesseract", ou vazio)
-ARG OCR_GROUPS=ocr-easyocr
+
+RUN echo -e "The environment is set to: $APP_ENV\nThe ocr_groups is set to: $OCR_GROUPS"
+
 RUN APP_ENV_LOWER=$(echo "$APP_ENV" | tr '[:upper:]' '[:lower:]') && \
     if [ "$APP_ENV_LOWER" = "production" ]; then \
         BASE_CMD="poetry install --no-interaction --no-ansi --without dev --no-root"; \
@@ -23,6 +26,7 @@ RUN APP_ENV_LOWER=$(echo "$APP_ENV" | tr '[:upper:]' '[:lower:]') && \
         BASE_CMD="poetry install --no-interaction --no-ansi --with dev --no-root"; \
     fi && \
     if [ -n "$OCR_GROUPS" ]; then \
+        echo -e "Installing OCR groups: $OCR_GROUPS\n"; \
         $BASE_CMD --with "$OCR_GROUPS"; \
     else \
         $BASE_CMD; \
