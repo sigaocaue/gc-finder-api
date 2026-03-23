@@ -1,6 +1,7 @@
 """Utilitários de segurança: hashing de senhas, criação e decodificação de tokens JWT."""
 
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -35,7 +36,8 @@ def create_refresh_token(data: dict) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.jwt_refresh_expire_days
     )
-    to_encode.update({"exp": expire})
+    # Garante unicidade do token mesmo para requisições simultâneas do mesmo usuário
+    to_encode.update({"exp": expire, "jti": str(uuid.uuid4())})
     return jwt.encode(to_encode, settings.jwt_refresh_secret, algorithm="HS256")
 
 
