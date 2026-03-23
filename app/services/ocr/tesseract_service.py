@@ -8,6 +8,9 @@ from app.services.ocr.base import OcrService
 
 logger = logging.getLogger(__name__)
 
+# Largura máxima para redimensionar a imagem antes do OCR (reduz consumo de memória)
+MAX_WIDTH = 1600
+
 try:
     import pytesseract
     from PIL import Image
@@ -32,8 +35,24 @@ def _run_ocr(image_path: str) -> list[str]:
 
     start = time_module.monotonic()
     image = Image.open(image_path)
+
+    # Redimensiona imagens grandes para economizar memória
+    if image.width > MAX_WIDTH:
+        ratio = MAX_WIDTH / image.width
+        new_size = (MAX_WIDTH, int(image.height * ratio))
+        image = image.resize(new_size, Image.LANCZOS)
+        logger.info(
+            "[ocr:tesseract] Imagem redimensionada para %dx%d (image=%s)",
+            new_size[0], new_size[1], image_path,
+        )
+
+    # Converte para escala de cinza para reduzir uso de memória (~3x menos)
+    if image.mode != "L":
+        image = image.convert("L")
+
     # Usa português e inglês
     raw_text = pytesseract.image_to_string(image, lang="por+eng")
+    image.close()
     elapsed = round(time_module.monotonic() - start, 2)
 
     # Divide o texto em linhas e remove linhas vazias
