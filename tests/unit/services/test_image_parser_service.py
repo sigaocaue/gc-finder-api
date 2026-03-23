@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.schemas.gc_image_import import GcExtractedData, MeetingExtracted
+from app.schemas.gc_image_import import GcExtractedData
 from app.services.image_parser_service import (
     WEEKDAY_MAP,
     _correct_ocr_text,
@@ -594,3 +594,141 @@ class TestParseOcrText:
         # Após substituição "O"→"0", cleaned é "20", mas hour==20 (len<=2 com int=20)
         result = _normalize_time("2O")
         assert result == "20:00"
+
+    # --- Helper e dados compartilhados para testes multi-OCR ---
+
+    @staticmethod
+    def _assert_gc_result(result, expected):
+        """Valida o resultado da extração de GC contra valores esperados."""
+        assert isinstance(result, GcExtractedData)
+        assert result.name == expected["name"]
+        assert result.description == expected.get("description")
+        assert result.zip_code == expected.get("zip_code")
+        assert result.street == expected["street"]
+        assert result.number == expected.get("number")
+        assert result.complement == expected.get("complement")
+        assert result.neighborhood == expected.get("neighborhood")
+        assert result.city == expected["city"]
+        assert result.state == expected["state"]
+        assert result.latitude == expected.get("latitude")
+        assert result.longitude == expected.get("longitude")
+
+        expected_leaders = expected["leaders"]
+        assert len(result.leaders) == len(expected_leaders)
+        for leader, exp in zip(result.leaders, expected_leaders):
+            assert leader.name == exp["name"]
+            assert leader.contacts[0].type == "whatsapp"
+            assert leader.contacts[0].value == exp["phone"]
+            assert leader.contacts[0].label is None
+
+        expected_meetings = expected["meetings"]
+        assert len(result.meetings) == len(expected_meetings)
+        for meeting, exp in zip(result.meetings, expected_meetings):
+            assert meeting.weekday == exp["weekday"]
+            assert meeting.start_time == exp["start_time"]
+            assert meeting.notes is None
+
+    _JARDIM_PEROLA_EXPECTED = {
+        "name": "Jardim Perola Itupeva",
+        "street": "Rua Maria Betelli Deboni",
+        "number": "172",
+        "complement": None,
+        "neighborhood": "Jd Perola",
+        "city": "Itupeva",
+        "state": "SP",
+        "leaders": [
+            {"name": "Heber", "phone": "11912811249"},
+            {"name": "Thalia", "phone": "11974507572"},
+        ],
+        "meetings": [{"weekday": 5, "start_time": "20:00"}],
+    }
+
+    _VILA_ANA_EXPECTED = {
+        "name": "Vila Ana 2",
+        "street": "Av Caetano Gornati",
+        "number": "1101",
+        "complement": "Casa 207, Condominio Vintage",
+        "neighborhood": None,
+        "city": "Jundiaí",
+        "state": "SP",
+        "leaders": [
+            {"name": "Rog\u00e9rio", "phone": "11964542597"},
+            {"name": "Thais", "phone": "11995389502"},
+        ],
+        "meetings": [{"weekday": 5, "start_time": "20:00"}],
+    }
+
+    # --- Testes parametrizados por motor OCR ---
+
+    @pytest.mark.parametrize("lines,overrides", [
+        pytest.param(
+            [
+                "gc", "Jardim Perola", "Itupeva", "Sexta-Feira | 2OH",
+                "Heber 1191281-1249", "Thalia 1197450-7572",
+                "Rua Maria Betelli Deboni;", "172", "Jd Perola",
+                "Itupeva", "La Go1nhA Jund1 4",
+            ],
+            {},
+            id="easyocr",
+        ),
+        pytest.param(
+            [
+                "Ss", "Jardim Perola", "Itupeva", "Sexta-Feira | 20H",
+                "Heber 1191281-1249", "Thalia 1197450-7572",
+                "Rua Maria Betelli Deboni,",
+                "Jd Perola \\u2014 Itupeva", "LAGoINHASUNDIAT",
+            ],
+            # Tesseract não capturou o número "172" neste OCR
+            {"number": None},
+            id="tesseract",
+        ),
+        pytest.param(
+            [
+                "gc", "Jardim Perola", "Itupeva", "Sexta-Feira | 20H",
+                "Heber 1191281-1249", "Thalia 1197450-7572",
+                "Rua Maria Betelli Deboni,", "Jd Perola", "172",
+                "Itupeva", "LAGOINHAJUNDIAI",
+            ],
+            {},
+            id="documentai",
+        ),
+    ])
+    def test_parse_jardim_perola_itupeva(self, lines, overrides):
+        """Testa parsing do GC Jardim Perola (Itupeva) para cada motor OCR."""
+        result = parse_ocr_text(lines)
+        expected = {**self._JARDIM_PEROLA_EXPECTED, **overrides}
+        self._assert_gc_result(result, expected)
+
+    @pytest.mark.parametrize("lines", [
+        pytest.param(
+            [
+                "gc", "Vila Ana 2", "Sexta-Feira", "2OH",
+                "Rog\u00e9rio 1196454-2597", "Thais 1199538-9502",
+                "Av Caetano Gornati 1101", "Casa 207",
+                "condominio Vintage", "LA G01nA A Jund|A [",
+            ],
+            id="easyocr",
+        ),
+        pytest.param(
+            [
+                "5:", "Vila Ana 2", "Sexta-Feira |20H",
+                "Rog\u00e9rio 1196454-2597", "Thais 1199538-9502",
+                "Av Caetano Gornati, 1101", "Casa 207,",
+                "Condominio Vintage", "LAGoINHASUNDIAT",
+            ],
+            id="tesseract",
+        ),
+        pytest.param(
+            [
+                "ge", "Vila Ana 2", "Sexta-Feira | 20H",
+                "Rog\u00e9rio 1196454-2597", "Thais 1199538-9502",
+                "Av Caetano Gornati, 1101", "Casa 207,",
+                "Condominio Vintage", "LAGOINHAJUNDIA\u00cd",
+            ],
+            id="documentai",
+        ),
+    ])
+    def test_parse_vila_ana(self, lines):
+        """Testa parsing do GC Vila Ana 2 para cada motor OCR."""
+        result = parse_ocr_text(lines)
+        self._assert_gc_result(result, self._VILA_ANA_EXPECTED)

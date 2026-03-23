@@ -152,6 +152,28 @@ def _is_noise_line(line: str) -> bool:
     return False
 
 
+def _is_gc_marker(text: str) -> bool:
+    """Verifica se o texto é um marcador de GC.
+
+    OCR pode gerar artefatos curtos no lugar de 'gc' (ex: 'Ss', '5:', 'ge').
+    Aceita qualquer texto curto (1-3 caracteres) como possível marcador.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.lower() == "gc":
+        return True
+    return 1 <= len(stripped) <= 3
+
+
+_STREET_PREFIXES = [
+    "rua", "avenida", "av", "alameda", "travessa", "estrada", "rodovia",
+]
+_COMPLEMENT_KEYWORDS_LIST = [
+    "casa", "apto", "apartamento", "bloco", "cond", "condomínio", "condominio", "torre",
+]
+
+
 def parse_ocr_text(lines: list[str]) -> GcExtractedData:
     """
     Analisa o texto extraído pelo OCR baseado na posição dos elementos.
@@ -165,7 +187,7 @@ def parse_ocr_text(lines: list[str]) -> GcExtractedData:
         -1: Rodapé (Lagoinha Jundiaí)
     """
 
-    if not lines or lines[0].lower() != 'gc':
+    if not lines or not _is_gc_marker(lines[0]):
         logger.warning("[image_parser] Formato inválido: primeiro elemento não é 'gc'")
         return GcExtractedData(
             name="",
@@ -208,11 +230,18 @@ def parse_ocr_text(lines: list[str]) -> GcExtractedData:
         line = corrected_lines[idx]
         weekday, time_str = _extract_weekday_and_time(line)
 
-        # Se não encontrou na primeira tentativa, tenta a próxima linha
-        if weekday is None and time_str is None:
-            idx += 1
-            if idx < total:
-                weekday, time_str = _extract_weekday_and_time(corrected_lines[idx])
+        # Tenta complementar com a próxima linha se faltou dia ou horário
+        if (weekday is None or time_str is None) and idx + 1 < total:
+            next_weekday, next_time = _extract_weekday_and_time(
+                corrected_lines[idx + 1]
+            )
+            if weekday is None:
+                weekday = next_weekday
+            if time_str is None:
+                time_str = next_time
+            # Avança o índice se a próxima linha contribuiu
+            if next_weekday is not None or next_time is not None:
+                idx += 1
 
         if weekday is not None and time_str is not None:
             meetings.append(MeetingExtracted(weekday=weekday, start_time=time_str))
@@ -258,36 +287,52 @@ def parse_ocr_text(lines: list[str]) -> GcExtractedData:
 
     if address_parts:
         # Tenta identificar logradouro (começa com Rua, Avenida, etc)
+        remaining = []
         for i, part in enumerate(address_parts):
             part_lower = part.lower()
-            if any(part_lower.startswith(prefix) for prefix in
-                   ["rua", "avenida", "av", "alameda", "travessa", "estrada", "rodovia"]):
+            if any(part_lower.startswith(prefix) for prefix in _STREET_PREFIXES):
                 street = part
-                # Próximo pode ser número
-                if i + 1 < len(address_parts):
-                    next_part = address_parts[i + 1]
-                    if next_part.isdigit():
-                        number = next_part
-                        # O resto pode ser complemento e bairro
-                        if i + 2 < len(address_parts):
-                            remaining = address_parts[i + 2:]
-                            # Tenta identificar complemento
-                            for rem in remaining:
-                                rem_lower = rem.lower()
-                                if any(keyword in rem_lower for keyword in ["casa", "apto", "bloco", "cond", "torre"]):
-                                    complement = rem
-                                    break
-                            # O último antes do rodapé geralmente é o bairro
-                            if not neighborhood and remaining:
-                                neighborhood = remaining[-1] if remaining else None
+                remaining = address_parts[i + 1:]
                 break
+
+        if street:
+            # Extrai número embutido no logradouro (ex: "Av X 1101" ou "Av X, 1101")
+            num_in_street = re.search(r"[,\s]+(\d+)\s*$", street)
+            if num_in_street:
+                number = num_in_street.group(1)
+                street = street[: num_in_street.start()]
+
+            # Remove pontuação final do logradouro
+            street = re.sub(r"[,;.]+$", "", street).strip()
+
+            # Classifica as partes restantes do endereço
+            complement_parts = []
+            for rem in remaining:
+                rem_clean = re.sub(r"[,;.]+$", "", rem).strip()
+                if not rem_clean:
+                    continue
+                rem_lower = rem_clean.lower()
+
+                if rem_clean.isdigit() and number is None:
+                    number = rem_clean
+                elif any(kw in rem_lower for kw in _COMPLEMENT_KEYWORDS_LIST):
+                    complement_parts.append(rem_clean.title())
+                elif neighborhood is None:
+                    nb_match = _NEIGHBORHOOD_PATTERN.search(rem_clean)
+                    if nb_match:
+                        neighborhood = nb_match.group(0).strip()
+
+            if complement_parts:
+                complement = ", ".join(complement_parts)
 
         # Se não encontrou logradouro específico, junta tudo
         if not street and address_parts:
-            # Tenta encontrar número no meio do endereço
             full_address = " ".join(address_parts)
-            # Busca padrão de rua + número
-            addr_match = re.search(r"(Rua|Avenida|Av)\s+([^,\d]+)[,\s]*(\d+)", full_address, re.IGNORECASE)
+            addr_match = re.search(
+                r"(Rua|Avenida|Av)\s+([^,\d]+)[,\s]*(\d+)",
+                full_address,
+                re.IGNORECASE,
+            )
             if addr_match:
                 street = f"{addr_match.group(1)} {addr_match.group(2)}".strip()
                 number = addr_match.group(3)
